@@ -96,8 +96,35 @@ class Eversubscription_Admin {
 		 * class.
 		 */
 
-		wp_enqueue_script( $this->plugin_name, plugin_dir_url( __FILE__ ) . 'js/eversubscription-admin.js', array( 'jquery' ), $this->version, false );
+		wp_enqueue_script( $this->plugin_name, plugin_dir_url( __FILE__ ) . 'js/eversubscription-admin.js', ['wp-element','wp-api-fetch', 'jquery'], $this->version, false );
 
 	}
 
+	/**
+	 * Add menu admin page
+	 *
+	 * @since    1.0.0
+	 */
+
+	public function add_plugin_admin_menu() {
+		add_menu_page(
+			'EverSubscription Admin',
+			'EverSubscription',
+			'manage_options',
+			'eversubscription-admin',
+			array( $this, 'display_plugin_admin_page' ),
+			'dashicons-admin-generic',
+			6
+		);
+	}
+
+	/**
+	 * Display the admin page
+	 *
+	 * @since    1.0.0
+	 */
+
+	public function display_plugin_admin_page() {
+		require_once plugin_dir_path( __FILE__ ) . 'partials/eversubscription-admin-display.php';
+	}
 }

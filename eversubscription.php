@@ -15,7 +15,7 @@
  * @wordpress-plugin
  * Plugin Name:       EverSubscription
  * Plugin URI:        https://github.com/joysuperman/EverSubscription.git
- * Description:       EverSubscription is powerful subscription master for woocommerce lets you easily create and manage recurring subscription products in your WooCommerce store.
+ * Description:       Create and manage recurring subscription products easily in WooCommerce with flexible billing cycles and customer-friendly subscription controls.
  * Version:           1.0.0
  * Author:            JOYSUPERMAN
  * Author URI:        https://www.joymojumder.com/

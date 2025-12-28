@@ -1,0 +1,43 @@
+{
+  "name": "eversubscription",
+  "version": "1.0.0",
+  "description": "Create and manage recurring subscription products easily in WooCommerce with flexible billing cycles and customer-friendly subscription controls.",
+  "main": "index.js",
+  "private": true,
+  "scripts": {
+    "build": "webpack --mode production",
+    "dev": "webpack --mode development --watch"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/joysuperman/EverSubscription.git"
+  },
+  "keywords": [],
+  "author": "JOYSUPERMAN",
+  "license": "ISC",
+  "type": "commonjs",
+  "bugs": {
+    "url": "https://github.com/joysuperman/EverSubscription/issues"
+  },
+  "homepage": "https://github.com/joysuperman/EverSubscription#readme",
+  "dependencies": {
+    "@tailwindcss/postcss": "^4.1.18",
+    "@wordpress/element": "^6.37.0",
+    "postcss": "^8.5.6",
+    "react": "^19.2.3",
+    "react-dom": "^19.2.3",
+    "tailwindcss": "^4.1.18"
+  },
+  "devDependencies": {
+    "@babel/core": "^7.28.5",
+    "@babel/preset-env": "^7.28.5",
+    "@babel/preset-react": "^7.28.5",
+    "babel-loader": "^10.0.0",
+    "css-loader": "^7.1.2",
+    "postcss-loader": "^8.2.0",
+    "style-loader": "^4.0.0",
+    "webpack": "^5.104.1",
+    "webpack-cli": "^6.0.1",
+    "webpack-dev-server": "^5.2.2"
+  }
+}
