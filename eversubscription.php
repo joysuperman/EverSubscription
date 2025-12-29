@@ -23,6 +23,11 @@
  * License URI:       http://www.gnu.org/licenses/gpl-2.0.txt
  * Text Domain:       eversubscription
  * Domain Path:       /languages
+ * Requires Plugins:   woocommerce
+ * Requires at least: 5.0
+ * Requires PHP:      7.4
+ * WC requires at least: 6.0
+ * WC tested up to: 6.5
  */
 
 // If this file is called directly, abort.
@@ -63,6 +68,23 @@ register_deactivation_hook( __FILE__, 'deactivate_eversubscription' );
  * admin-specific hooks, and public-facing site hooks.
  */
 require plugin_dir_path( __FILE__ ) . 'includes/class-eversubscription.php';
+
+/**
+ * The compatibility class that handles compatibility with WooCommerce and other plugins.
+ */
+require plugin_dir_path( __FILE__ ) . 'includes/class-eversubscription-compatibility.php';
+
+/**
+ * Initialize plugin compatibility.
+ *
+ * This must be called early, before WooCommerce initializes.
+ *
+ * @since    1.0.0
+ */
+function eversubscription_init_compatibility() {
+	new Eversubscription_Compatibility( __FILE__ );
+}
+eversubscription_init_compatibility();
 
 /**
  * Begins execution of the plugin.
