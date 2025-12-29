@@ -158,7 +158,7 @@ class Eversubscription {
 		$this->loader->add_action( 'admin_enqueue_scripts', $plugin_admin, 'enqueue_scripts' );
 		$this->loader->add_action( 'admin_menu', $plugin_admin, 'add_plugin_admin_menu' );
 		$this->loader->add_filter('product_type_selector', $plugin_admin, 'add_woo_product_type');
-		$this->loader->add_filter('woocommerce_product_class', $plugin_admin, 'register_class', 10, 4);
+		// $this->loader->add_filter('woocommerce_product_class', $plugin_admin, 'register_class', 10, 4);
 
 		// Correct hooks for admin tab
 		$this->loader->add_filter('woocommerce_product_data_tabs', $plugin_admin, 'ever_subscription_product_tab');

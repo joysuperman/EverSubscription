@@ -3,7 +3,7 @@ const path = require('path');
 module.exports = {
   entry: './src/index.jsx',
   output: {
-    path: path.resolve(__dirname, 'admin/js'),
+    path: path.resolve(__dirname, 'admin/build'),
     filename: 'eversubscription-admin.js'
   },
   resolve: {

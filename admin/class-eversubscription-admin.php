@@ -96,7 +96,13 @@ class Eversubscription_Admin {
 		 * class.
 		 */
 
-		wp_enqueue_script( $this->plugin_name, plugin_dir_url( __FILE__ ) . 'js/eversubscription-admin.js', ['wp-element','wp-api-fetch', 'jquery'], $this->version, false );
+		wp_enqueue_script( $this->plugin_name, plugin_dir_url( __FILE__ ) . 'js/eversubscription-admin.js', ['jquery'], $this->version, true );
+
+		/**
+		 * Block-based admin script
+		 * 
+		 */
+		wp_enqueue_script( $this->plugin_name.'_react', plugin_dir_url( __FILE__ ) . 'build/eversubscription-admin.js', ['wp-element','wp-api-fetch', 'jquery'], $this->version, false );
 
 	}
 
@@ -139,195 +145,182 @@ class Eversubscription_Admin {
         return $types;
     }
 
-    public function register_class($classname, $product_type, $post_type, $product_id) {
-        if ($product_type === 'ever_subscription') {
-            $classname = 'WC_Product_Ever_Subscription';
-        }
-        return $classname;
-    }
+    // public function register_class($classname, $product_type, $post_type, $product_id) {
+    //     if ($product_type === 'ever_subscription') {
+    //         $classname = 'WC_Product_Ever_Subscription';
+    //     }
+    //     return $classname;
+    // }
 
 	public function ever_subscription_product_tab($tabs) {
-		$tabs['ever_subscription_tab'] = array(
-			'label'    => __('Subscription', $this->plugin_name),
-			'target'   => 'ever_subscription_data',
-			'class'    => ['show_if_ever_subscription'],
-			'priority' => 21,
-		);
-		return $tabs;
-	}
+    $tabs['ever_subscription_tab'] = array(
+        'label'    => __('Subscription', $this->plugin_name),
+        'target'   => 'ever_subscription_data',
+        // Add "show_if_ever_subscription" to the class array
+        'class'    => array('show_if_ever_subscription'),
+        'priority' => 5, 
+    );
+    return $tabs;
+}
+
 
 	public function ever_subscription_product_tab_content() {
 		global $post;
+		$product = wc_get_product( $post->ID );
+		// Get the active currency symbol (e.g., $, €, £)
+		$currency_symbol = get_woocommerce_currency_symbol();
 
 		echo '<div id="ever_subscription_data" class="panel woocommerce_options_panel show_if_ever_subscription">';
-
-			// Subscription Price
-			echo '<div class="options_group subscription_pricing">';
-
-			woocommerce_wp_text_input([
-				'id'                => '_ever_subscription_price',
-				'label'             => __('Subscription Price (£)', $this->plugin_name),
-				'type'              => 'number',
-				'custom_attributes' => ['step' => '0.01', 'min' => '0'],
-				'value'             => get_post_meta($post->ID, '_ever_subscription_price', true) ?: '',
-				'description'       => __('Enter the subscription price.', $this->plugin_name),
-				'desc_tip'          => true,
-			]);
-
-			// Billing Interval
-			woocommerce_wp_text_input([
-				'id'                => '_ever_billing_interval',
-				'label'             => __('Billing Interval', $this->plugin_name),
-				'type'              => 'number',
-				'custom_attributes' => ['step' => '1', 'min' => '1'],
-				'value'             => get_post_meta($post->ID, '_ever_billing_interval', true) ?: 1,
-				'description'       => __('How often to charge the subscription.', $this->plugin_name),
-				'desc_tip'          => true,
-			]);
-			// Billing Period (radio buttons)
-			woocommerce_wp_select([
-				'id'                => '_ever_billing_period',
-				'label'             => __('Billing Period', $this->plugin_name),
-				'type'              => 'select',
-				'options'           => ['day'=>'Day','week'=>'Week','month'=>'Month','year'=>'Year'],
-				'value'             => get_post_meta($post->ID, '_ever_billing_period', true) ?: 'month',
-			]);
-
-			// Subscription Length (Expire After)
-			woocommerce_wp_select([
-				'id'      => '_ever_subscription_length',
-				'label'   => __('Expire After', $this->plugin_name),
-				'options' => [
-					'0' => __('Never expire', $this->plugin_name),
-					'1' => '1 year',
-					'2' => '2 years',
-					'3' => '3 years',
-					'4' => '4 years',
-					'5' => '5 years',
-				],
-				'value'   => get_post_meta($post->ID, '_ever_subscription_length', true) ?: '0',
-				'description' => __('Automatically expire the subscription after this length of time.', $this->plugin_name),
-				'desc_tip' => true,
-			]);
-
-			// Sign-up Fee
-			woocommerce_wp_text_input([
-				'id'                => '_ever_subscription_sign_up_fee',
-				'label'             => __('Sign-up Fee (£)', $this->plugin_name),
-				'type'              => 'number',
-				'custom_attributes' => ['step' => '0.01', 'min' => '0'],
-				'value'             => get_post_meta($post->ID, '_ever_subscription_sign_up_fee', true) ?: '',
-				'description'       => __('Optional amount charged at the start of the subscription.', $this->plugin_name),
-				'desc_tip'          => true,
-			]);
-
-			// Free Trial
-			echo '<p class="form-field">';
-			woocommerce_wp_text_input([
-				'id'                => '_ever_subscription_trial_length',
-				'label'             => __('Free Trial', $this->plugin_name),
-				'type'              => 'number',
-				'custom_attributes' => ['step' => '1', 'min' => '0'],
-				'value'             => get_post_meta($post->ID, '_ever_subscription_trial_length', true) ?: '0',
-				'description'       => __('Number of days/weeks/months for a free trial.', $this->plugin_name),
-				'desc_tip'          => true,
-			]);
-
-			woocommerce_wp_select([
-				'id'      => '_ever_subscription_trial_period',
-				'label'   => __('', $this->plugin_name),
-				'options' => ['day'=>'Days','week'=>'Weeks','month'=>'Months','year'=>'Years'],
-				'value'   => get_post_meta($post->ID, '_ever_subscription_trial_period', true) ?: 'day',
-			]);
-			echo '</p>';
-
-			echo '</div>'; // end options_group
-
+			
 			// Subscription Pricing Group
+			echo '<div class="options_group">';
+				// Subscription Price
+				woocommerce_wp_text_input([
+					'id'          => '_ever_subscription_price',
+					'label'       => sprintf( __( 'Subscription Price (%s)', $this->plugin_name ), $currency_symbol ),
+					'type'        => 'number',
+					'custom_attributes' => ['step' => '0.01', 'min' => '0'],
+					'value'       => $product->get_meta('_ever_subscription_price'), 
+					'desc_tip'    => true,
+					'description' => __('Enter the subscription price.', $this->plugin_name),
+				]);
+
+				// Billing Interval
+				woocommerce_wp_text_input([
+					'id'          => '_ever_billing_interval',
+					'label'       => __('Billing Interval', $this->plugin_name),
+					'type'        => 'number',
+					'custom_attributes' => ['step' => '1', 'min' => '1'],
+					'value'       => $product->get_meta('_ever_billing_interval') ?: 1,
+				]);
+
+				// Billing Period
+				woocommerce_wp_select([
+					'id'          => '_ever_billing_period',
+					'label'       => __('Billing Period', $this->plugin_name),
+					'options'     => ['day'=>'Day','week'=>'Week','month'=>'Month','year'=>'Year'],
+					'value'       => $product->get_meta('_ever_billing_period') ?: 'month',
+				]);
+
+				// Subscription Length
+				woocommerce_wp_select([
+					'id'      => '_ever_subscription_length',
+					'label'   => __('Expire After', $this->plugin_name),
+					'options' => [
+						'0' => __('Never expire', $this->plugin_name),
+						'1' => '1 year', '2' => '2 years', '3' => '3 years', '4' => '4 years', '5' => '5 years',
+					],
+					'value'   => $product->get_meta('_ever_subscription_length') ?: '0',
+				]);
+			echo '</div>';
+
+			// Fees & Trials Group
+			echo '<div class="options_group">';
+				// Sign-up Fee
+				woocommerce_wp_text_input([
+					'id'          => '_ever_subscription_sign_up_fee',
+					'label'       => sprintf( __( 'Sign-up Fee (%s)', $this->plugin_name ), $currency_symbol ),
+					'type'        => 'number',
+					'custom_attributes' => ['step' => '0.01', 'min' => '0'],
+					'value'       => $product->get_meta('_ever_subscription_sign_up_fee'),
+				]);
+
+				// Free Trial Length
+				woocommerce_wp_text_input([
+					'id'          => '_ever_subscription_trial_length',
+					'label'       => __('Free Trial', $this->plugin_name),
+					'type'        => 'number',
+					'value'       => $product->get_meta('_ever_subscription_trial_length') ?: '0',
+				]);
+
+				// Free Trial Period
+				woocommerce_wp_select([
+					'id'      => '_ever_subscription_trial_period',
+					'label'   => __('Trial Period', $this->plugin_name),
+					'options' => ['day'=>'Days','week'=>'Weeks','month'=>'Months','year'=>'Years'],
+					'value'   => $product->get_meta('_ever_subscription_trial_period') ?: 'day',
+				]);
+			echo '</div>';
+
+			// Sale Price Group
 			echo '<div class="options_group pricing show_if_ever_subscription">';
+    
+				// Sale Price Input
+				woocommerce_wp_text_input([
+					'id'          => '_ever_sale_price',
+					'label'       => sprintf( __( 'Sale price (%s)', $this->plugin_name ), $currency_symbol ),
+					'data_type'   => 'price',
+					'type'        => 'number',
+					'custom_attributes' => ['step' => '0.01', 'min' => '0'],
+					'value'       => $product->get_meta('_ever_sale_price'),
+					'desc_tip'    => false,
+					'description' => '<span class="description"><span id="sale-price-period">every year</span> <a href="#" class="sale_schedule">' . __( 'Schedule', 'woocommerce' ) . '</a></span>',
+				]);
 
-			// Sale Price
-			woocommerce_wp_text_input([
-				'id'                => '_ever_sale_price',
-				'label'             => __('Sale price (£)', $this->plugin_name),
-				'type'              => 'number',
-				'custom_attributes' => ['step' => '0.01', 'min' => '0'],
-				'value'             => get_post_meta($post->ID, '_ever_sale_price', true) ?: '',
-				'description'       => '',
-				'desc_tip'          => true,
-			]);
-			echo '<span id="sale-price-period">' . __('every year', $this->plugin_name) . '</span> <a href="#" class="sale_schedule">' . __('Schedule', $this->plugin_name) . '</a>';
-			// Sale Price Dates (hidden by default)
-			$sale_from = get_post_meta($post->ID, '_ever_sale_price_dates_from', true);
-			$sale_to   = get_post_meta($post->ID, '_ever_sale_price_dates_to', true);
+				// Date Fields Wrapper
+				$show_dates = ( $product->get_meta('_sale_price_dates_from') || $product->get_meta('_sale_price_dates_to') ) ? '' : 'display:none;';
+				
+				echo '<p class="form-field sale_price_dates_fields" style="' . $show_dates . '">';
+					echo '<label for="_sale_price_dates_from">' . __( 'Sale price dates', 'woocommerce' ) . '</label>';
+					
+					// From Date
+					echo '<input type="text" class="short date-picker" name="_sale_price_dates_from" id="_sale_price_dates_from" value="' . esc_attr( $product->get_meta('_sale_price_dates_from') ) . '" placeholder="YYYY-MM-DD" maxlength="10" pattern="[0-9]{4}-(0[1-9]|1[012])-(0[1-9]|1[0-9]|2[0-9]|3[01])" />';
+					
+					// To Date
+					echo '<input type="text" class="short date-picker" name="_sale_price_dates_to" id="_sale_price_dates_to" value="' . esc_attr( $product->get_meta('_sale_price_dates_to') ) . '" placeholder="YYYY-MM-DD" maxlength="10" pattern="[0-9]{4}-(0[1-9]|1[012])-(0[1-9]|1[0-9]|2[0-9]|3[01])" />';
+					
+					echo '<a href="#" class="description cancel_sale_schedule">' . __( 'Cancel', 'woocommerce' ) . '</a>';
+					echo wc_help_tip( __( 'The sale will start at 00:00:00 of "From" date and end at 23:59:59 of "To" date.', 'woocommerce' ) );
+				echo '</p>';
 
-			echo '<p class="form-field sale_price_dates_fields" style="display:none;">';
-			echo '<label for="_ever_sale_price_dates_from">' . __('Sale price dates', $this->plugin_name) . '</label>';
-			echo '<input type="date" class="short hasDatepicker" name="_ever_sale_price_dates_from" id="_ever_sale_price_dates_from" value="' . esc_attr($sale_from) . '" placeholder="From… YYYY-MM-DD"></br>';
-			echo '<input type="date" class="short hasDatepicker" name="_ever_sale_price_dates_to" id="_ever_sale_price_dates_to" value="' . esc_attr($sale_to) . '" placeholder="To… YYYY-MM-DD">';
-			echo '<a href="#" class="description cancel_sale_schedule">' . __('Cancel', $this->plugin_name) . '</a>';
-			echo '<span class="woocommerce-help-tip" tabindex="0" aria-label="' . esc_attr__('The sale will start at 00:00:00 of "From" date and end at 23:59:59 of "To" date.', $this->plugin_name) . '"></span>';
-			echo '</p>';
+			echo '</div>';
 
-			echo '</div>'; // end options_group
-		
-		echo '</div>'; // end panel
+		echo '</div>';
 	}
 
-
 	public function ever_subscription_save_product_data( $product ) {
+		$post_id = $product->get_id();
 
-		// if ( ! $product instanceof WC_Product ) {
-		// 	return;
-		// }
-
-		// if ( $product->get_type() !== 'ever_subscription' ) {
-		// 	return;
-		// }
-
-		// if ( isset( $_POST['_ever_subscription_price'] ) ) {
-		// 	$price = wc_format_decimal( wp_unslash( $_POST['_ever_subscription_price'] ) );
-		// 	$product->set_regular_price( $price );
-		// 	$product->set_price( $price );
-		// 	$product->update_meta_data( '_ever_subscription_price', $price );
-		// }
-
-		// if ( isset( $_POST['_ever_billing_interval'] ) ) {
-		// 	$product->update_meta_data(
-		// 		'_ever_billing_interval',
-		// 		absint( $_POST['_ever_billing_interval'] )
-		// 	);
-		// }
-
-		// if ( isset( $_POST['_ever_billing_period'] ) ) {
-		// 	$product->update_meta_data(
-		// 		'_ever_billing_period',
-		// 		sanitize_text_field( $_POST['_ever_billing_period'] )
-		// 	);
-		// }
-
-		// $product->save();
-
-
-		 if ( $product->get_type() !== 'ever_subscription' ) {
-        	return;
+		// 1. FORCE the product type persistence
+		if ( isset( $_POST['product-type'] ) && 'ever_subscription' === $_POST['product-type'] ) {
+			wp_set_object_terms( $post_id, 'ever_subscription', 'product_type' );
 		}
 
-		// Save fields here
-		$price = wc_format_decimal( $_POST['_ever_subscription_price'] ?? '' );
+		// 2. Map all fields to their sanitization types
+		$fields = [
+			'_ever_subscription_price'         => 'wc_format_decimal',
+			'_ever_billing_interval'           => 'absint',
+			'_ever_billing_period'             => 'sanitize_text_field',
+			'_ever_subscription_length'        => 'sanitize_text_field',
+			'_ever_subscription_sign_up_fee'   => 'wc_format_decimal',
+			'_ever_subscription_trial_length'  => 'absint',
+			'_ever_subscription_trial_period'  => 'sanitize_text_field',
+			'_ever_sale_price'                 => 'wc_format_decimal',
+		];
 
-		if ( $price !== '' ) {
-			$product->set_regular_price( $price );
-			$product->set_price( $price );
-			$product->update_meta_data( '_ever_subscription_price', $price );
+		foreach ( $fields as $key => $sanitize_callback ) {
+			if ( isset( $_POST[ $key ] ) ) {
+				$value = call_user_func( $sanitize_callback, $_POST[ $key ] );
+				
+				// Save to Product Meta
+				$product->update_meta_data( $key, $value );
+
+				// 3. Sync with Core WC Price Fields (Essential for Shop Display)
+				if ( '_ever_subscription_price' === $key ) {
+					$product->set_regular_price( $value );
+					// If there's no sale price currently being set, set main price to regular price
+					if ( empty( $_POST['_ever_sale_price'] ) ) {
+						$product->set_price( $value );
+					}
+				}
+				
+				if ( '_ever_sale_price' === $key) {
+					$product->set_sale_price( $value );
+					$product->set_price( $value );
+				}
+			}
 		}
 
-		$product->save(die($price));
-    }
-
-   
-
-
-
-
+		$product->save();
+	}
 }
