@@ -87,6 +87,80 @@ function eversubscription_init_compatibility() {
 eversubscription_init_compatibility();
 
 /**
+ * Register REST API routes
+ *
+ * @since    1.0.0
+ */
+function eversubscription_register_api_routes() {
+	Eversubscription_API::register_routes();
+}
+
+/**
+ * Create subscription from order
+ *
+ * @param int $order_id Order ID
+ * @since    1.0.0
+ */
+function eversubscription_create_subscription_from_order( $order_id ) {
+	$order = wc_get_order( $order_id );
+	if ( ! $order ) {
+		return;
+	}
+
+	// Check if subscription already created for this order
+	$existing_subscription = get_post_meta( $order_id, '_ever_subscription_created', true );
+	if ( $existing_subscription ) {
+		return;
+	}
+
+	foreach ( $order->get_items() as $item ) {
+		$product = $item->get_product();
+		if ( $product && $product->get_type() === 'ever_subscription' ) {
+			$user_id = $order->get_user_id();
+			if ( ! $user_id ) {
+				$user_id = $order->get_customer_id();
+			}
+
+			if ( $user_id ) {
+				$subscription_id = Eversubscription_Subscription::create_subscription(
+					$order_id,
+					$product->get_id(),
+					$user_id
+				);
+
+				if ( $subscription_id ) {
+					update_post_meta( $order_id, '_ever_subscription_created', true );
+					update_post_meta( $order_id, '_ever_subscription_id', $subscription_id );
+				}
+			}
+		}
+	}
+}
+
+/**
+ * Process recurring payments
+ *
+ * @since    1.0.0
+ */
+function eversubscription_process_recurring_payments() {
+	global $wpdb;
+	$table_name = $wpdb->prefix . 'ever_subscriptions';
+
+	// Get all active subscriptions with due payments
+	$now = current_time( 'mysql' );
+	$subscriptions = $wpdb->get_results(
+		$wpdb->prepare(
+			"SELECT id FROM $table_name WHERE status = 'active' AND next_payment_date <= %s",
+			$now
+		)
+	);
+
+	foreach ( $subscriptions as $subscription ) {
+		Eversubscription_Subscription::process_recurring_payment( $subscription->id );
+	}
+}
+
+/**
  * Begins execution of the plugin.
  *
  * Since everything within the plugin is registered via hooks,
