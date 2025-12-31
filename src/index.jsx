@@ -1,4 +1,5 @@
-import * as wpElement from '@wordpress/element';
+import React from 'react';
+import ReactDOM from 'react-dom';
 import App from './App';
 import './styles.css';
 
@@ -7,9 +8,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
   if (!el) return;
 
-  if (typeof wpElement.createRoot === 'function') {
-    wpElement.createRoot(el).render(<App />);
+  // Use React 18 createRoot if available, otherwise use render
+  if (ReactDOM.createRoot) {
+    const root = ReactDOM.createRoot(el);
+    root.render(React.createElement(App));
   } else {
-    wpElement.render(<App />, el);
+    ReactDOM.render(React.createElement(App), el);
   }
 });

@@ -30,7 +30,11 @@ class Eversubscription_Deactivator {
 	 * @since    1.0.0
 	 */
 	public static function deactivate() {
-
+		// Clear scheduled cron event
+		$timestamp = wp_next_scheduled( 'ever_subscription_process_recurring_payments' );
+		if ( $timestamp ) {
+			wp_unschedule_event( $timestamp, 'ever_subscription_process_recurring_payments' );
+		}
 	}
 
 }

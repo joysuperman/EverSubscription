@@ -122,6 +122,16 @@ class Eversubscription {
 		 */
 		require_once plugin_dir_path( dirname( __FILE__ ) ) . 'public/class-eversubscription-public.php';
 
+		/**
+		 * Subscription management class
+		 */
+		require_once plugin_dir_path( dirname( __FILE__ ) ) . 'includes/class-eversubscription-subscription.php';
+
+		/**
+		 * REST API class
+		 */
+		require_once plugin_dir_path( dirname( __FILE__ ) ) . 'includes/class-eversubscription-api.php';
+
 		$this->loader = new Eversubscription_Loader();
 
 	}
@@ -166,6 +176,16 @@ class Eversubscription {
 
 		// Save the fields
 		$this->loader->add_action('woocommerce_admin_process_product_object',$plugin_admin,'ever_subscription_save_product_data');
+
+		// Register REST API routes
+		add_action('rest_api_init', 'eversubscription_register_api_routes');
+
+		// Handle subscription creation on order completion
+		add_action('woocommerce_order_status_completed', 'eversubscription_create_subscription_from_order');
+		add_action('woocommerce_order_status_processing', 'eversubscription_create_subscription_from_order');
+
+		// Cron job for recurring payments
+		add_action('ever_subscription_process_recurring_payments', 'eversubscription_process_recurring_payments');
 	}
 
 	/**
@@ -181,6 +201,15 @@ class Eversubscription {
 
 		$this->loader->add_action( 'wp_enqueue_scripts', $plugin_public, 'enqueue_styles' );
 		$this->loader->add_action( 'wp_enqueue_scripts', $plugin_public, 'enqueue_scripts' );
+
+		// Display subscription info on product page
+		$this->loader->add_action( 'woocommerce_single_product_summary', $plugin_public, 'display_subscription_info', 25 );
+
+		// My Account subscriptions
+		$this->loader->add_action( 'init', $plugin_public, 'add_subscriptions_endpoint' );
+		$this->loader->add_filter( 'woocommerce_account_menu_items', $plugin_public, 'add_subscriptions_menu_item' );
+		$this->loader->add_action( 'woocommerce_account_subscriptions_endpoint', $plugin_public, 'display_subscriptions_content' );
+		$this->loader->add_action( 'template_redirect', $plugin_public, 'handle_subscription_actions' );
 
 	}
 
