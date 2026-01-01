@@ -1,42 +1,80 @@
-jQuery(document).ready(function($) {
-	// Auto-select 'ever_subscription' product type when subscription fields are filled
-	var subscriptionFields = [
-		'_ever_subscription_price',
-		'_ever_billing_interval',
-		'_ever_billing_period',
-		'_ever_subscription_length',
-		'_ever_subscription_sign_up_fee',
-		'_ever_subscription_trial_length',
-		'_ever_subscription_trial_period',
-		'_ever_sale_price'
-	];
+(function( $ ) {
+	'use strict';
 
-	function checkAndSetProductType() {
-		var hasSubscriptionData = false;
+	/**
+	 * Handle WooCommerce product type visibility for Ever Subscription
+	 * Shows/hides metabox panels based on selected product type
+	 */
+
+	$(document).ready(function() {
 		
-		subscriptionFields.forEach(function(fieldName) {
-			var field = $('input[name="' + fieldName + '"], select[name="' + fieldName + '"]');
-			if (field.length && field.val() && field.val() !== '' && field.val() !== '0') {
-				hasSubscriptionData = true;
-			}
-		});
+		// Function to show/hide options based on product type
+		function toggleProductTypeOptions() {
+			var $productType = $('select#product-type');
+			var selectedType = $productType.val();
 
-		if (hasSubscriptionData) {
-			var productTypeSelect = $('#product-type');
-			if (productTypeSelect.length && productTypeSelect.val() !== 'ever_subscription') {
-				productTypeSelect.val('ever_subscription').trigger('change');
+			// Hide all product-type specific options
+			$('.show_if_simple').closest('.options_group, .panel').hide();
+			$('.show_if_grouped').closest('.options_group, .panel').hide();
+			$('.show_if_external').closest('.options_group, .panel').hide();
+			$('.show_if_variable').closest('.options_group, .panel').hide();
+			$('.show_if_ever_subscription').closest('.options_group, .panel').hide();
+			$('.hide_if_simple').closest('.options_group, .panel').show();
+			$('.hide_if_grouped').closest('.options_group, .panel').show();
+			$('.hide_if_external').closest('.options_group, .panel').show();
+			$('.hide_if_variable').closest('.options_group, .panel').show();
+			$('.hide_if_ever_subscription').closest('.options_group, .panel').show();
+
+			// Show options for selected product type
+			$('.show_if_' + selectedType).closest('.options_group, .panel').show();
+			$('.show_if_' + selectedType).show();
+
+			// Hide options that should be hidden for this type
+			$('.hide_if_' + selectedType).closest('.options_group, .panel').hide();
+			$('.hide_if_' + selectedType).hide();
+
+			// Specifically handle Ever Subscription panel
+			if ( 'ever_subscription' === selectedType ) {
+				$('#ever_subscription_data').show();
+				$('.show_if_ever_subscription').show().closest('.options_group, .panel').show();
+			} else {
+				$('#ever_subscription_data').hide();
+				$('.show_if_ever_subscription').hide().closest('.options_group, .panel').hide();
 			}
+
+			// Trigger any dependent scripts
+			$(document.body).trigger('woocommerce-product-type-change', selectedType);
 		}
-	}
 
-	// Check on field changes
-	subscriptionFields.forEach(function(fieldName) {
-		$(document).on('input change', 'input[name="' + fieldName + '"], select[name="' + fieldName + '"]', function() {
-			checkAndSetProductType();
+		// Initial load - set the correct options
+		toggleProductTypeOptions();
+
+		// Change event handler
+		$('select#product-type').on('change', function() {
+			toggleProductTypeOptions();
 		});
+
+		// Handle sale price schedule links
+		$(document).on('click', '.sale_schedule', function(e) {
+			e.preventDefault();
+			$('.sale_price_dates_fields').slideDown();
+		});
+
+		// Handle cancel schedule
+		$(document).on('click', '.cancel_sale_schedule', function(e) {
+			e.preventDefault();
+			$('.sale_price_dates_fields').slideUp();
+			$('#_sale_price_dates_from').val('');
+			$('#_sale_price_dates_to').val('');
+		});
+
+		// Initialize date pickers if jQuery UI is available
+		if ( $.datepicker ) {
+			$('.date-picker').datepicker({
+				dateFormat: 'yy-mm-dd'
+			});
+		}
+
 	});
 
-	// Also check on page load in case fields are pre-filled
-	setTimeout(checkAndSetProductType, 500);
-});
-
+})( jQuery );

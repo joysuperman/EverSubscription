@@ -146,6 +146,23 @@ class Eversubscription_Admin {
 	}
 
 	/**
+	 * Map the `ever_subscription` product type to our frontend product class.
+	 *
+	 * @param string $classname Determined classname
+	 * @param string $product_type Product type identifier
+	 * @param string $post_type Post type
+	 * @param int    $product_id Product ID
+	 * @return string
+	 */
+	public function register_product_class( $classname, $product_type, $post_type, $product_id ) {
+		if ( 'ever_subscription' === $product_type ) {
+			return 'WC_Product_Ever_Subscription';
+		}
+
+		return $classname;
+	}
+
+	/**
 	 * Display the admin page
 	 *
 	 * @since    1.0.0
@@ -158,14 +175,26 @@ class Eversubscription_Admin {
 	/**
 	 * Add custom product type
 	 *
+	 * Registers the "Ever Subscription" custom product type in WooCommerce
+	 *
 	 * @since    1.0.0
+	 * @param array $types Array of WooCommerce product types
+	 * @return array Updated product types array
 	 */
-
 	public function add_woo_product_type($types) {
         $types['ever_subscription'] = __('Ever Subscription', $this->plugin_name);
         return $types;
     }
 
+	/**
+	 * Add custom product tab
+	 *
+	 * Registers the "Subscription" tab in the WooCommerce product data metabox
+	 *
+	 * @since    1.0.0
+	 * @param array $tabs Array of WooCommerce product data tabs
+	 * @return array Updated product tabs array
+	 */
 	public function ever_subscription_product_tab($tabs) {
 		$tabs['ever_subscription_tab'] = array(
 			'label'    => __('Subscription', $this->plugin_name),
@@ -176,7 +205,13 @@ class Eversubscription_Admin {
 		return $tabs;
 	}
 
-
+	/**
+	 * Output custom product tab content
+	 *
+	 * Renders the subscription fields panel with all custom product fields
+	 *
+	 * @since    1.0.0
+	 */
 	public function ever_subscription_product_tab_content() {
 		global $post;
 		
@@ -187,17 +222,8 @@ class Eversubscription_Admin {
 
 		$product = wc_get_product( $post->ID );
 		
-		// Check if product exists and is subscription type
+		// Check if product exists
 		if ( ! $product ) {
-			return;
-		}
-
-		// Only show content if product type is ever_subscription or if subscription data exists
-		$product_type = $product->get_type();
-		$has_subscription_data = $product->get_meta( '_ever_subscription_price' ) || $product->get_meta( '_ever_billing_interval' ) || $product->get_meta( '_ever_billing_period' );
-
-		// If not subscription type and no subscription data, don't show the tab content
-		if ( $product_type !== 'ever_subscription' && ! $has_subscription_data ) {
 			return;
 		}
 
@@ -312,15 +338,38 @@ class Eversubscription_Admin {
 		echo '</div>';
 	}
 
+	/**
+	 * Save custom subscription product data
+	 *
+	 * Handles sanitization and storage of subscription fields
+	 * Also syncs custom prices with WooCommerce core price fields
+	 *
+	 * @since    1.0.0
+	 * @param WC_Product $product The product object being saved
+	 */
 	public function ever_subscription_save_product_data( $product ) {
-		// Only process if product exists
+		// Only process if product exists and is ever_subscription type
 		if ( ! $product || ! $product->get_id() ) {
 			return;
 		}
 
 		$post_id = $product->get_id();
 
-		// Map all fields to their sanitization types
+		// Determine the product type from the POST first (the product object may not yet reflect the selected type)
+		$posted_type = isset( $_POST['product-type'] ) ? sanitize_text_field( wp_unslash( $_POST['product-type'] ) ) : '';
+		if ( 'ever_subscription' === $posted_type ) {
+			// Ensure the product_type taxonomy is set so WooCommerce recognizes it
+			wp_set_object_terms( $post_id, 'ever_subscription', 'product_type' );
+			$product_type = 'ever_subscription';
+		} else {
+			// Fall back to the product object's current type
+			$product_type = $product->get_type();
+		}
+
+		// Only process subscription fields if this is ever_subscription type
+		if ( 'ever_subscription' !== $product_type ) {
+			return;
+		}
 		$fields = [
 			'_ever_subscription_price'         => 'wc_format_decimal',
 			'_ever_billing_interval'           => 'absint',
@@ -334,51 +383,37 @@ class Eversubscription_Admin {
 			'_sale_price_dates_to'             => 'sanitize_text_field',
 		];
 
-		// Check if any subscription fields are being saved
-		$has_subscription_data = false;
-		foreach ( $fields as $key => $sanitize_callback ) {
-			if ( isset( $_POST[ $key ] ) && ! empty( $_POST[ $key ] ) ) {
-				// For numeric fields, check if value is greater than 0
-				if ( in_array( $key, [ '_ever_subscription_price', '_ever_billing_interval', '_ever_subscription_sign_up_fee', '_ever_subscription_trial_length' ] ) ) {
-					if ( floatval( $_POST[ $key ] ) > 0 ) {
-						$has_subscription_data = true;
-						break;
-					}
-				} else {
-					$has_subscription_data = true;
-					break;
-				}
-			}
-		}
-
-		// FORCE the product type persistence if subscription data exists or product type is explicitly set
-		if ( $has_subscription_data || ( isset( $_POST['product-type'] ) && 'ever_subscription' === $_POST['product-type'] ) ) {
-			wp_set_object_terms( $post_id, 'ever_subscription', 'product_type' );
-		}
-
 		// Process and save all subscription fields
 		foreach ( $fields as $key => $sanitize_callback ) {
 			if ( isset( $_POST[ $key ] ) ) {
-				$value = call_user_func( $sanitize_callback, $_POST[ $key ] );
+				$value = $_POST[ $key ];
+				
+				// Skip empty values
+				if ( '' === $value || '0' === $value ) {
+					$product->delete_meta_data( $key );
+					continue;
+				}
+				
+				// Sanitize the value
+				$sanitized_value = call_user_func( $sanitize_callback, $value );
 				
 				// Save to Product Meta
-				$product->update_meta_data( $key, $value );
+				$product->update_meta_data( $key, $sanitized_value );
 
-				// Sync with Core WC Price Fields (Essential for Shop Display)
-				if ( '_ever_subscription_price' === $key && ! empty( $value ) ) {
-					$product->set_regular_price( $value );
-					// If there's no sale price currently being set, set main price to regular price
+				// Sync with Core WC Price Fields
+				if ( '_ever_subscription_price' === $key && ! empty( $sanitized_value ) ) {
+					$product->set_regular_price( $sanitized_value );
+					// If there's no sale price, set it as the main price
 					if ( empty( $_POST['_ever_sale_price'] ) ) {
-						$product->set_price( $value );
+						$product->set_price( $sanitized_value );
 					}
 				}
 				
 				if ( '_ever_sale_price' === $key ) {
-					if ( ! empty( $value ) ) {
-						$product->set_sale_price( $value );
-						$product->set_price( $value );
+					if ( ! empty( $sanitized_value ) ) {
+						$product->set_sale_price( $sanitized_value );
+						$product->set_price( $sanitized_value );
 					} else {
-						// If sale price is empty, remove it and set price to regular price
 						$product->set_sale_price( '' );
 						$regular_price = $product->get_meta( '_ever_subscription_price' );
 						if ( $regular_price ) {
@@ -388,14 +423,15 @@ class Eversubscription_Admin {
 				}
 
 				// Handle sale price dates
-				if ( '_sale_price_dates_from' === $key || '_sale_price_dates_to' === $key ) {
-					if ( '_sale_price_dates_from' === $key ) {
-						$product->set_date_on_sale_from( $value ? strtotime( $value ) : '' );
-					}
-					if ( '_sale_price_dates_to' === $key ) {
-						$product->set_date_on_sale_to( $value ? strtotime( $value ) : '' );
-					}
+				if ( '_sale_price_dates_from' === $key ) {
+					$product->set_date_on_sale_from( $sanitized_value ? strtotime( $sanitized_value ) : '' );
 				}
+				if ( '_sale_price_dates_to' === $key ) {
+					$product->set_date_on_sale_to( $sanitized_value ? strtotime( $sanitized_value ) : '' );
+				}
+			} else {
+				// Clear the field if not posted
+				$product->delete_meta_data( $key );
 			}
 		}
 

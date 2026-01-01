@@ -168,8 +168,8 @@ class Eversubscription {
 		$this->loader->add_action( 'admin_enqueue_scripts', $plugin_admin, 'enqueue_scripts' );
 		$this->loader->add_action( 'admin_menu', $plugin_admin, 'add_plugin_admin_menu' );
 		$this->loader->add_filter('product_type_selector', $plugin_admin, 'add_woo_product_type');
-		// $this->loader->add_filter('woocommerce_product_class', $plugin_admin, 'register_class', 10, 4);
-
+		// Register product class mapping on the admin instance (method lives in admin class)
+		$this->loader->add_filter('woocommerce_product_class', $plugin_admin, 'register_product_class', 10, 4);
 		// Correct hooks for admin tab
 		$this->loader->add_filter('woocommerce_product_data_tabs', $plugin_admin, 'ever_subscription_product_tab');
 		$this->loader->add_action('woocommerce_product_data_panels', $plugin_admin, 'ever_subscription_product_tab_content');
@@ -197,10 +197,30 @@ class Eversubscription {
 	 */
 	private function define_public_hooks() {
 
+		// Include our custom product class only after WooCommerce core classes are available.
+		if ( class_exists( 'WC_Product_Simple' ) ) {
+			require_once plugin_dir_path( __FILE__ ) . '/class-wc-product-ever-subscription.php';
+		} else {
+			add_action( 'woocommerce_loaded', array( $this, 'include_product_class' ), 10 );
+		}
+
 		$plugin_public = new Eversubscription_Public( $this->get_plugin_name(), $this->get_version() );
 
 		$this->loader->add_action( 'wp_enqueue_scripts', $plugin_public, 'enqueue_styles' );
 		$this->loader->add_action( 'wp_enqueue_scripts', $plugin_public, 'enqueue_scripts' );
+
+		// Keep internal product prices numeric; modify displayed price HTML instead
+		$this->loader->add_filter( 'woocommerce_get_price_html', $plugin_public, 'subscription_price_html', 10, 2 );
+		// Show billing period on cart, checkout and order price display and item meta
+		$this->loader->add_filter( 'woocommerce_cart_item_price', $plugin_public, 'subscription_cart_item_price', 10, 3 );
+		$this->loader->add_filter( 'woocommerce_get_item_data', $plugin_public, 'subscription_get_item_data', 10, 2 );
+
+		// Cart and checkout totals with subscription details - using correct hooks
+		$this->loader->add_action( 'woocommerce_cart_totals_before_order_total', $plugin_public, 'display_cart_subscription_details' );
+		$this->loader->add_action( 'woocommerce_review_order_before_payment', $plugin_public, 'display_checkout_subscription_details' );
+
+		// Thank you / Order received page
+		$this->loader->add_action( 'woocommerce_thankyou', $plugin_public, 'display_thankyou_subscription_details' );
 
 		// Display subscription info on product page
 		$this->loader->add_action( 'woocommerce_single_product_summary', $plugin_public, 'display_subscription_info', 25 );
@@ -251,6 +271,16 @@ class Eversubscription {
 	 */
 	public function get_version() {
 		return $this->version;
+	}
+
+
+	/**
+	 * Include the custom product class after WooCommerce is loaded.
+	 */
+	public function include_product_class() {
+		if ( ! class_exists( 'WC_Product_Ever_Subscription' ) ) {
+			require_once plugin_dir_path( __FILE__ ) . '/class-wc-product-ever-subscription.php';
+		}
 	}
 
 }

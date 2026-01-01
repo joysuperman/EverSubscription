@@ -23,6 +23,11 @@
  * License URI:       http://www.gnu.org/licenses/gpl-2.0.txt
  * Text Domain:       eversubscription
  * Domain Path:       /languages
+ * Requires Plugins:   woocommerce
+ * Requires at least: 5.0
+ * Requires PHP:      7.4
+ * WC requires at least: 6.0
+ * WC tested up to: 6.5
  */
 
 // If this file is called directly, abort.
