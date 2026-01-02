@@ -211,6 +211,7 @@ class Eversubscription {
 
 		// Keep internal product prices numeric; modify displayed price HTML instead
 		$this->loader->add_filter( 'woocommerce_get_price_html', $plugin_public, 'subscription_price_html', 10, 2 );
+		$this->loader->add_action( 'woocommerce_before_calculate_totals', $plugin_public, 'apply_signup_fee_to_cart_items', 20 );
 		// Show billing period on cart, checkout and order price display and item meta
 		$this->loader->add_filter( 'woocommerce_cart_item_price', $plugin_public, 'subscription_cart_item_price', 10, 3 );
 		$this->loader->add_filter( 'woocommerce_get_item_data', $plugin_public, 'subscription_get_item_data', 10, 2 );

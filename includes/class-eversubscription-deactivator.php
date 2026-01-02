@@ -35,6 +35,9 @@ class Eversubscription_Deactivator {
 		if ( $timestamp ) {
 			wp_unschedule_event( $timestamp, 'ever_subscription_process_recurring_payments' );
 		}
+
+		// Flush rewrite rules to remove plugin endpoints
+		flush_rewrite_rules();
 	}
 
 }

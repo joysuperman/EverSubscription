@@ -52,6 +52,11 @@ class Eversubscription_Admin {
 		$this->plugin_name = $plugin_name;
 		$this->version = $version;
 
+		// Register frontend My Account subscription endpoint and menu item
+		add_action( 'init', [ $this, 'register_my_account_endpoint' ] );
+		add_filter( 'woocommerce_account_menu_items', [ $this, 'add_my_account_menu_item' ], 10, 1 );
+		add_action( 'woocommerce_account_subscriptions_endpoint', [ $this, 'subscriptions_endpoint_content' ] );
+
 	}
 
 	/**
@@ -437,5 +442,90 @@ class Eversubscription_Admin {
 
 		// Save the product
 		$product->save();
+	}
+
+	/**
+	 * Register the "subscriptions" My Account endpoint.
+	 */
+	public function register_my_account_endpoint() {
+		add_rewrite_endpoint( 'subscriptions', EP_PAGES );
+	}
+
+	/**
+	 * Insert the Subscriptions item into the My Account menu.
+	 *
+	 * @param array $items Current menu items
+	 * @return array Modified items
+	 */
+	public function add_my_account_menu_item( $items ) {
+		$new_items = array();
+		foreach ( $items as $key => $label ) {
+			$new_items[ $key ] = $label;
+			if ( 'orders' === $key ) {
+				$new_items['subscriptions'] = __( 'Subscriptions', $this->plugin_name );
+			}
+		}
+		return $new_items;
+	}
+
+	/**
+	 * Render the Subscriptions endpoint content on My Account page.
+	 */
+	public function subscriptions_endpoint_content() {
+		if ( ! is_user_logged_in() ) {
+			echo '<p>' . esc_html__( 'Please log in to view your subscriptions.', 'woocommerce' ) . '</p>';
+			return;
+		}
+
+		$customer_id = get_current_user_id();
+		$orders = wc_get_orders( array( 'customer_id' => $customer_id, 'limit' => -1 ) );
+
+		$found = false;
+		echo '<h2>' . esc_html__( 'Your Subscriptions', $this->plugin_name ) . '</h2>';
+		echo '<table class="shop_table shop_table_responsive my_account_subscriptions"><thead><tr>' .
+			'<th>' . esc_html__( 'Product', $this->plugin_name ) . '</th>' .
+			'<th>' . esc_html__( 'Order', $this->plugin_name ) . '</th>' .
+			'<th>' . esc_html__( 'Price', $this->plugin_name ) . '</th>' .
+			'<th>' . esc_html__( 'Billing', $this->plugin_name ) . '</th>' .
+			'<th>' . esc_html__( 'Status', $this->plugin_name ) . '</th>' .
+			'</tr></thead><tbody>';
+
+		if ( empty( $orders ) ) {
+			echo '<tr><td colspan="5">' . esc_html__( 'No subscriptions found.', $this->plugin_name ) . '</td></tr>';
+		} else {
+			foreach ( $orders as $order ) {
+				foreach ( $order->get_items() as $item ) {
+					$product = $item->get_product();
+					if ( ! $product ) {
+						continue;
+					}
+					if ( 'ever_subscription' !== $product->get_type() ) {
+						continue;
+					}
+					$found = true;
+					$product_name = $item->get_name();
+					$order_link = $order->get_view_order_url();
+					$regular = $product->get_meta( '_ever_subscription_price' );
+					$price_html = $regular ? wc_price( $regular ) : wc_price( $product->get_price() );
+					$interval = $product->get_meta( '_ever_billing_interval' ) ?: '1';
+					$period = $product->get_meta( '_ever_billing_period' ) ?: 'month';
+					$billing = sprintf( '%s %s', esc_html( $interval ), esc_html( $period ) );
+					$status = ucfirst( $order->get_status() );
+
+					echo '<tr>';
+					echo '<td data-title="' . esc_attr__( 'Product', $this->plugin_name ) . '">' . esc_html( $product_name ) . '</td>';
+					echo '<td data-title="' . esc_attr__( 'Order', $this->plugin_name ) . '"><a href="' . esc_url( $order_link ) . '">' . esc_html( $order->get_order_number() ) . '</a><br/><small>' . esc_html( $order->get_date_created() ? $order->get_date_created()->date_i18n( wc_date_format() . ' ' . wc_time_format() ) : '' ) . '</small></td>';
+					echo '<td data-title="' . esc_attr__( 'Price', $this->plugin_name ) . '">' . wp_kses_post( $price_html ) . '</td>';
+					echo '<td data-title="' . esc_attr__( 'Billing', $this->plugin_name ) . '">' . esc_html( $billing ) . '</td>';
+					echo '<td data-title="' . esc_attr__( 'Status', $this->plugin_name ) . '">' . esc_html( $status ) . '</td>';
+					echo '</tr>';
+				}
+			}
+			if ( ! $found ) {
+				echo '<tr><td colspan="5">' . esc_html__( 'No subscription products found in your orders.', $this->plugin_name ) . '</td></tr>';
+			}
+		}
+
+		echo '</tbody></table>';
 	}
 }

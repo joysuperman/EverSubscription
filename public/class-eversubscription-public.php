@@ -51,7 +51,33 @@ class Eversubscription_Public {
 
 		$this->plugin_name = $plugin_name;
 		$this->version = $version;
+	}
 
+	/**
+	 * Apply sign-up fee as cart item price for guest users.
+	 *
+	 * @param WC_Cart $cart
+	 */
+	public function apply_signup_fee_to_cart_items( $cart ) {
+		if ( ! $cart || ( is_admin() && ! defined( 'DOING_AJAX' ) ) ) {
+			return;
+		}
+
+		foreach ( $cart->get_cart() as $cart_item_key => $cart_item ) {
+			$product = isset( $cart_item['data'] ) ? $cart_item['data'] : null;
+			if ( ! $product || ! is_object( $product ) || ! method_exists( $product, 'get_type' ) || $product->get_type() !== 'ever_subscription' ) {
+				continue;
+			}
+
+			$sign_up_fee = floatval( $product->get_meta( '_ever_subscription_sign_up_fee' ) ) ?: 0;
+			if ( ! is_user_logged_in() && $sign_up_fee > 0 ) {
+				// Set unit price to sign-up fee and adjust line totals
+				$cart->cart_contents[ $cart_item_key ]['data']->set_price( $sign_up_fee );
+				$qty = isset( $cart_item['quantity'] ) ? intval( $cart_item['quantity'] ) : ( isset( $cart_item['qty'] ) ? intval( $cart_item['qty'] ) : 1 );
+				$cart->cart_contents[ $cart_item_key ]['line_total'] = floatval( $sign_up_fee ) * $qty;
+				$cart->cart_contents[ $cart_item_key ]['line_subtotal'] = floatval( $sign_up_fee ) * $qty;
+			}
+		}
 	}
 
 	/**
@@ -115,9 +141,9 @@ class Eversubscription_Public {
 		$subscription_price = $product->get_meta( '_ever_subscription_price' );
 		$billing_interval = $product->get_meta( '_ever_billing_interval' ) ?: 1;
 		$billing_period = $product->get_meta( '_ever_billing_period' ) ?: 'month';
-		$sign_up_fee = $product->get_meta( '_ever_subscription_sign_up_fee' ) ?: 0;
-		$trial_length = $product->get_meta( '_ever_subscription_trial_length' ) ?: 0;
+		$trial_length = intval( $product->get_meta( '_ever_subscription_trial_length' ) ) ?: 0;
 		$trial_period = $product->get_meta( '_ever_subscription_trial_period' ) ?: 'day';
+		$sign_up_fee = floatval( $product->get_meta( '_ever_subscription_sign_up_fee' ) ) ?: 0;
 
 		$currency_symbol = get_woocommerce_currency_symbol();
 		$billing_text = sprintf(
@@ -127,7 +153,7 @@ class Eversubscription_Public {
 		);
 
 		echo '<div class="ever-subscription-info" style="margin: 20px 0; padding: 15px; background: #f5f5f5; border-radius: 5px;">';
-		echo '<h3 style="margin-top: 0;">' . esc_html__( 'Subscription Details', $this->plugin_name ) . '</h3>';
+		echo '<h4 style="margin-top: 0;">' . esc_html__( 'Subscription Details', $this->plugin_name ) . '</h4>';
 		echo '<p><strong>' . esc_html__( 'Price:', $this->plugin_name ) . '</strong> ' . esc_html( $currency_symbol . number_format( $subscription_price, 2 ) ) . ' ' . esc_html( $billing_text ) . '</p>';
 
 		if ( $sign_up_fee > 0 ) {
@@ -138,6 +164,16 @@ class Eversubscription_Public {
 			echo '<p><strong>' . esc_html__( 'Free Trial:', $this->plugin_name ) . '</strong> ' . esc_html( $trial_length . ' ' . $trial_period . '(s)' ) . '</p>';
 		}
 
+		// Add a simple Subscribe (add to cart) button on the product page for this subscription product.
+		if ( method_exists( $product, 'is_purchasable' ) && $product->is_purchasable() && $product->is_in_stock() ) {
+			echo '<div class="ever-subscribe-action" style="margin-top:12px;">';
+			echo '<form class="cart" action="' . esc_url( wc_get_cart_url() ) . '" method="post">';
+			echo '<input type="hidden" name="add-to-cart" value="' . esc_attr( $product->get_id() ) . '" />';
+			echo '<button type="submit" class="single_add_to_cart_button button alt">' . esc_html__( 'Subscribe', $this->plugin_name ) . '</button>';
+			echo '</form>';
+			echo '</div>';
+		}
+
 		echo '</div>';
 	}
 
@@ -146,8 +182,14 @@ class Eversubscription_Public {
 			return $price;
 		}
 
+		// If guest and sign-up fee is set, use sign-up fee as the internal price
+		$sign_up_fee = floatval( $product->get_meta( '_ever_subscription_sign_up_fee' ) ) ?: 0;
+		if ( ! is_user_logged_in() && $sign_up_fee > 0 ) {
+			$price = $sign_up_fee;
+		}
+
 		// Ensure internal price remains numeric for WooCommerce internals
-		$numeric = preg_replace( '/[^0-9\.\-]/', '', (string) $price );
+		$numeric = preg_replace( '/[^0-9\.-]/', '', (string) $price );
 		if ( $numeric === '' ) {
 			return $price;
 		}
@@ -168,6 +210,12 @@ class Eversubscription_Public {
 		}
 
 		$billing_period = $product->get_meta( '_ever_billing_period' ) ?: 'month';
+		// If guest and sign-up fee exists, display sign-up fee instead of regular price
+		$sign_up_fee = floatval( $product->get_meta( '_ever_subscription_sign_up_fee' ) ) ?: 0;
+		if ( ! is_user_logged_in() && $sign_up_fee > 0 ) {
+			return wc_price( $sign_up_fee ) . ' /' . esc_html( $billing_period );
+		}
+
 		return $price_html . ' /' . esc_html( $billing_period );
 	}
 
@@ -186,6 +234,13 @@ class Eversubscription_Public {
 		}
 
 		$billing_period = $product->get_meta( '_ever_billing_period' ) ?: 'month';
+
+		// If guest and sign-up fee exists, show sign-up fee as the displayed price
+		$sign_up_fee = floatval( $product->get_meta( '_ever_subscription_sign_up_fee' ) ) ?: 0;
+		if ( ! is_user_logged_in() && $sign_up_fee > 0 ) {
+			return wc_price( $sign_up_fee ) . ' /' . esc_html( $billing_period );
+		}
+
 		return $price_html . ' /' . esc_html( $billing_period );
 	}
 
@@ -202,32 +257,54 @@ class Eversubscription_Public {
 			return $item_data;
 		}
 
-		$billing_interval = $product->get_meta( '_ever_billing_interval' ) ?: 1;
+		$billing_interval = intval( $product->get_meta( '_ever_billing_interval' ) ) ?: 1;
 		$billing_period = $product->get_meta( '_ever_billing_period' ) ?: 'month';
 		$sign_up_fee = floatval( $product->get_meta( '_ever_subscription_sign_up_fee' ) ) ?: 0;
 		$trial_length = intval( $product->get_meta( '_ever_subscription_trial_length' ) ) ?: 0;
 		$trial_period = $product->get_meta( '_ever_subscription_trial_period' ) ?: 'day';
+		// For subscription item meta we do not expose quantity — always treat as single subscription
+		$price = floatval( $product->get_meta( '_ever_subscription_price' ) );
+		if ( ! $price ) {
+			$price = floatval( $product->get_price() );
+		}
 
-		$billing_text = sprintf( 'Every %d %s', $billing_interval, $billing_period . ( $billing_interval > 1 ? 's' : '' ) );
+		// Human readable billing text
+		$billing_text = sprintf( __( 'Every %d %s', $this->plugin_name ), $billing_interval, $billing_period . ( $billing_interval > 1 ? 's' : '' ) );
 
+		// Next / first payment date (formatted)
+		$next_date = $this->calculate_next_payment_date( $trial_length, $trial_period, $billing_interval, $billing_period );
+
+		// Primary subscription line
 		$item_data[] = array(
 			'key'   => __( 'Subscription', $this->plugin_name ),
 			'value' => esc_html( $billing_text ),
 		);
 
-		if ( $sign_up_fee > 0 ) {
+		if ( $price > 0 ) {
 			$item_data[] = array(
-				'key'   => __( 'Sign-up Fee', $this->plugin_name ),
-				'value' => wc_price( $sign_up_fee ),
+				'key'   => __( 'Price', $this->plugin_name ),
+				'value' => wc_price( $price ),
 			);
 		}
 
+		// Free trial
 		if ( $trial_length > 0 ) {
+			$trial_label = $trial_length . ' ' . $trial_period . ( $trial_length > 1 ? 's' : '' );
 			$item_data[] = array(
 				'key'   => __( 'Free Trial', $this->plugin_name ),
-				'value' => esc_html( $trial_length . ' ' . $trial_period . ( $trial_length > 1 ? 's' : '' ) ),
+				'value' => esc_html( $trial_label ),
 			);
 		}
+
+		// First/Next payment date
+		if ( $next_date ) {
+			$item_data[] = array(
+				'key'   => __( 'First Payment Date', $this->plugin_name ),
+				'value' => esc_html( $next_date ),
+			);
+		}
+
+		// No separate 'First Payment' meta — price already reflects sign-up fee for guests
 
 		return $item_data;
 	}
@@ -397,14 +474,14 @@ class Eversubscription_Public {
                 continue;
             }
 
-			$qty = isset( $cart_item['quantity'] ) ? intval( $cart_item['quantity'] ) : ( isset( $cart_item['qty'] ) ? intval( $cart_item['qty'] ) : 1 );
+			// For subscription products we intentionally ignore quantity (always treated as 1)
+			$orig_qty = isset( $cart_item['quantity'] ) ? intval( $cart_item['quantity'] ) : ( isset( $cart_item['qty'] ) ? intval( $cart_item['qty'] ) : 1 );
 
 			// Prefer cart item's computed line total (which accounts for discounts/taxes) when available
 			if ( isset( $cart_item['line_total'] ) ) {
-				$line_total = floatval( $cart_item['line_total'] );
+				$line_total_raw = floatval( $cart_item['line_total'] );
 			} else {
-				$price = floatval( $product->get_price() );
-				$line_total = $price * $qty;
+				$line_total_raw = floatval( $product->get_price() ) * $orig_qty;
 			}
 
 			$product_name = $product->get_name();
@@ -412,6 +489,17 @@ class Eversubscription_Public {
 			// If this is a subscription product, include subscription-specific info
 			if ( $product->get_type() === 'ever_subscription' ) {
 				$has_subscription = true;
+
+				// For display/calculation purposes treat subscription quantity as 1
+				$qty = 1;
+
+				// Determine unit price (respect sign-up fee for guests if applicable)
+				$sign_up_fee = floatval( $product->get_meta( '_ever_subscription_sign_up_fee' ) ) ?: 0;
+				$apply_signup_fee = ( ! is_user_logged_in() && $sign_up_fee > 0 );
+				$unit_price = $apply_signup_fee ? $sign_up_fee : floatval( $product->get_price() );
+
+				$line_total = $unit_price * $qty;
+
 				$recurring_subtotal += $line_total;
 				$recurring_total += $line_total;
 
@@ -425,11 +513,22 @@ class Eversubscription_Public {
 					$first_payment_date = $next_date;
 				}
 
+				// If a sign-up fee exists, only guests are charged it for the first period
+				$sign_up_fee = floatval( $product->get_meta( '_ever_subscription_sign_up_fee' ) ) ?: 0;
+				$apply_signup_fee = ( ! is_user_logged_in() && $sign_up_fee > 0 );
+				$first_period_amount = $apply_signup_fee ? ( $sign_up_fee * $qty ) : $line_total;
+
 				$items_rows .= '<tr class="ever-recurring-item">';
-				$items_rows .= '<td class="ever-product-name">' . esc_html( $product_name ) . ' <strong class="ever-product-quantity">× ' . esc_html( $qty ) . '</strong></td>';
-				$items_rows .= '<td class="ever-product-total">' . wc_price( $line_total ) . ' <span class="subscription-details"> / ' . esc_html( $billing_period ) . '</span>';
+				$items_rows .= '<td class="ever-product-name">' . esc_html( $product_name ) . '</td>';
+				// Show sign-up fee as the displayed unit price for guests, otherwise show regular unit price
+				$display_total = $unit_price * $qty;
+				$items_rows .= '<td class="ever-product-total">' . wc_price( $display_total ) . ' <span class="subscription-details"> / ' . esc_html( $billing_period ) . '</span>';
 				if ( $next_date ) {
-					$items_rows .= '<div class="first-payment-date"><small>' . esc_html__( 'First renewal:', $this->plugin_name ) . ' ' . esc_html( $next_date ) . '</small></div>';
+					$items_rows .= '<div class="first-payment-date"><small>' . esc_html__( 'First renewal:', $this->plugin_name ) . ' ' . esc_html( $next_date );
+					if ( $apply_signup_fee ) {
+						$items_rows .= ' — ' . esc_html__( 'First payment:', $this->plugin_name ) . ' ' . wc_price( $first_period_amount );
+					}
+					$items_rows .= '</small></div>';
 				}
 				$items_rows .= '</td>';
 				$items_rows .= '</tr>'; // .ever-recurring-item
@@ -455,6 +554,8 @@ class Eversubscription_Public {
 		echo '<th>' . esc_html__( 'Recurring Subtotal', $this->plugin_name ) . '</th>';
 		echo '<td data-title="' . esc_attr__( 'Recurring Subtotal', $this->plugin_name ) . '">' . wc_price( $recurring_subtotal ) . '</td>';
 		echo '</tr>';
+
+
 
 		echo '<tr class="ever-recurring-order-total">';
 		echo '<th>' . esc_html__( 'Recurring total', $this->plugin_name ) . '</th>';
@@ -550,10 +651,15 @@ class Eversubscription_Public {
 		$sign_up_fee = floatval( $product->get_meta( '_ever_subscription_sign_up_fee' ) ) ?: 0;
 		$trial_length = intval( $product->get_meta( '_ever_subscription_trial_length' ) ) ?: 0;
 		$trial_period = $product->get_meta( '_ever_subscription_trial_period' ) ?: 'day';
+		// Subscriptions are single-quantity items
+		$quantity = 1;
 		$product_name = $product->get_name();
 
 		// Calculate next payment date
 		$next_payment_date = $this->calculate_next_payment_date( $trial_length, $trial_period, $billing_interval, $billing_period );
+		// Determine whether signup fee applies (only for guests)
+		$apply_signup_fee = ( ! is_user_logged_in() && $sign_up_fee > 0 );
+		$first_payment_amount = $apply_signup_fee ? ( $sign_up_fee * $quantity ) : ( $product->get_meta( '_ever_subscription_price' ) ? floatval( $product->get_meta( '_ever_subscription_price' ) ) * $quantity : floatval( $product->get_price() ) * $quantity );
 
 		$billing_text = sprintf( __( 'Every %d %s', $this->plugin_name ), $billing_interval, $billing_period . ( $billing_interval > 1 ? 's' : '' ) );
 
@@ -563,9 +669,13 @@ class Eversubscription_Public {
 		$html .= esc_html__( 'Billing:', $this->plugin_name ) . ' <strong>' . esc_html( $billing_text ) . '</strong>';
 		$html .= '</p>';
 
-		if ( $sign_up_fee > 0 ) {
+		if ( $apply_signup_fee ) {
 			$html .= '<p style="margin: 5px 0; color: #666; font-size: 0.9em;">';
 			$html .= esc_html__( 'Sign-up Fee:', $this->plugin_name ) . ' <strong>' . wc_price( $sign_up_fee ) . '</strong>';
+			$html .= '</p>';
+			// Show first payment amount (sign-up fee applies to first period for guests)
+			$html .= '<p style="margin: 5px 0; color: #28a745; font-size: 0.95em;">';
+			$html .= '<strong>' . esc_html__( 'First Payment:', $this->plugin_name ) . '</strong> ' . wc_price( $first_payment_amount );
 			$html .= '</p>';
 		}
 

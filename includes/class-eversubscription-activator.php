@@ -90,6 +90,9 @@ class Eversubscription_Activator {
 		if ( ! wp_next_scheduled( 'ever_subscription_process_recurring_payments' ) ) {
 			wp_schedule_event( time(), 'hourly', 'ever_subscription_process_recurring_payments' );
 		}
+
+		// Ensure rewrite rules include the plugin endpoints
+		flush_rewrite_rules();
 	}
 
 }
