@@ -1,9 +1,7 @@
 import React from 'react';
 import ReactDOM from 'react-dom';
-import { HashRouter } from "react-router-dom";
 import App from './App';
 import './styles.css';
-
 
 document.addEventListener('DOMContentLoaded', () => {
   const el = document.getElementById('eversubscription-admin-app');
@@ -13,8 +11,8 @@ document.addEventListener('DOMContentLoaded', () => {
   // Use React 18 createRoot if available, otherwise use render
   if (ReactDOM.createRoot) {
     const root = ReactDOM.createRoot(el);
-    root.render(React.createElement(HashRouter, null, React.createElement(App)));
+    root.render(React.createElement(App));
   } else {
-    ReactDOM.render(React.createElement(HashRouter, null, React.createElement(App)), el);
+    ReactDOM.render(React.createElement(App), el);
   }
 });

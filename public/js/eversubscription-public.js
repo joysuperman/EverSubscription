@@ -28,5 +28,11 @@
 	 * Although scripts in the WordPress core, Plugins and Themes may be
 	 * practising this, we should strive to set a better example in our own work.
 	 */
-
+	var $rows = $('tr.ever-recurring-item, tr.ever-recurring-total, tr.ever-recurring-subtotal, tr.ever-recurring-order-total');
+	if ( $rows.length ) {
+		var $sub = $('tr.cart-subtotal').first();
+		if ( $sub.length ) {
+			$sub.before( $rows );
+		}
+	}
 })( jQuery );
