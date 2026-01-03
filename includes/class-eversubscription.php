@@ -212,19 +212,22 @@ class Eversubscription {
 		// Keep internal product prices numeric; modify displayed price HTML instead
 		$this->loader->add_filter( 'woocommerce_get_price_html', $plugin_public, 'subscription_price_html', 10, 2 );
 		$this->loader->add_action( 'woocommerce_before_calculate_totals', $plugin_public, 'apply_signup_fee_to_cart_items', 20 );
+
+
+		// Display subscription info on product page
+		$this->loader->add_action( 'woocommerce_single_product_summary', $plugin_public, 'display_subscription_info', 25 );
 		// Show billing period on cart, checkout and order price display and item meta
 		$this->loader->add_filter( 'woocommerce_cart_item_price', $plugin_public, 'subscription_cart_item_price', 10, 3 );
 		$this->loader->add_filter( 'woocommerce_get_item_data', $plugin_public, 'subscription_get_item_data', 10, 2 );
 
 		// Cart and checkout totals with subscription details - using correct hooks
-		$this->loader->add_action( 'woocommerce_cart_totals_before_order_total', $plugin_public, 'display_cart_subscription_details' );
 		$this->loader->add_action( 'woocommerce_review_order_before_payment', $plugin_public, 'display_checkout_subscription_details' );
 
-		// Thank you / Order received page
-		$this->loader->add_action( 'woocommerce_thankyou', $plugin_public, 'display_thankyou_subscription_details' );
-
-		// Display subscription info on product page
-		$this->loader->add_action( 'woocommerce_single_product_summary', $plugin_public, 'display_subscription_info', 25 );
+		// Thank you / Order received page - display after order details
+		$this->loader->add_action( 'woocommerce_order_details_after_order_table', $plugin_public, 'display_thankyou_subscription_details' );
+		
+		// Handle subscription preference form submission
+		$this->loader->add_action( 'init', $plugin_public, 'handle_subscription_preferences' );
 
 		// My Account subscriptions
 		$this->loader->add_action( 'init', $plugin_public, 'add_subscriptions_endpoint' );

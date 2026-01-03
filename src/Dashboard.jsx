@@ -6,40 +6,10 @@ import SubscriptionsTable from './components/SubscriptionsTable';
 import Pagination from './components/Pagination';
 import SubscriptionModal from './components/SubscriptionModal';
 
-// Define the API Namespace
+// API namespace used by the admin app
 const API_NAMESPACE = '/eversubscription/v1';
 
-// Improved apiFetch handler
-const apiFetch = async (options) => {
-    // 1. Try to use the native WordPress apiFetch if available
-    if (window.wp && window.wp.apiFetch) {
-        return window.wp.apiFetch(options);
-    }
-
-    // 2. Fallback to standard fetch using localized settings
-    const apiSettings = window.eversubscriptionApi || {};
-    const basePath = apiSettings.root || '/wp-json/';
-    // Ensure path doesn't have leading slash if root has trailing, and vice versa
-    const cleanPath = options.path.startsWith('/') ? options.path.substring(1) : options.path;
-    const url = basePath + cleanPath;
-
-    const response = await fetch(url, {
-        method: options.method || 'GET',
-        headers: {
-            'Content-Type': 'application/json',
-            'X-WP-Nonce': apiSettings.nonce || '',
-        },
-        ...(options.data && { body: JSON.stringify(options.data) }),
-    });
-
-    if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || 'Request failed');
-    }
-    return response.json();
-};
-
-export default function Dashboard() {
+export default function Dashboard({ apiFetch }) {
     const [subscriptions, setSubscriptions] = useState([]);
     const [loading, setLoading] = useState(true);
     const [stats, setStats] = useState({});
@@ -151,54 +121,45 @@ export default function Dashboard() {
     };
 
     return (
-        <div className="eversubscription-admin p-6 bg-gray-50 min-h-screen">
-            <div className="max-w-7xl mx-auto">
-                <div className="mb-8">
-                    <h1 className="text-3xl font-bold text-gray-900 mb-2">EverSubscription Management</h1>
-                    <p className="text-gray-600">Manage all your subscription products and customers</p>
+        <>
+            <StatsCards stats={stats} />
 
-                    <Navbar />
-                </div>
+            <Filters
+                statusFilter={statusFilter}
+                onStatusFilterChange={(val) => { setStatusFilter(val); setCurrentPage(1); }}
+                onRefresh={loadSubscriptions}
+            />
 
-                <StatsCards stats={stats} />
-
-                <Filters
-                    statusFilter={statusFilter}
-                    onStatusFilterChange={(val) => { setStatusFilter(val); setCurrentPage(1); }}
-                    onRefresh={loadSubscriptions}
+            <div className="bg-white rounded-lg shadow overflow-hidden">
+                <SubscriptionsTable
+                    subscriptions={subscriptions}
+                    loading={loading}
+                    onStatusChange={handleStatusChange}
+                    onView={setSelectedSubscription}
+                    onDelete={handleDelete}
+                    getStatusBadgeClass={getStatusBadgeClass}
+                    formatDate={formatDate}
+                    formatCurrency={formatCurrency}
                 />
 
-                <div className="bg-white rounded-lg shadow overflow-hidden">
-                    <SubscriptionsTable
-                        subscriptions={subscriptions}
-                        loading={loading}
-                        onStatusChange={handleStatusChange}
-                        onView={setSelectedSubscription}
-                        onDelete={handleDelete}
-                        getStatusBadgeClass={getStatusBadgeClass}
-                        formatDate={formatDate}
-                        formatCurrency={formatCurrency}
-                    />
-
-                    <Pagination
-                        currentPage={currentPage}
-                        subscriptions={subscriptions}
-                        perPage={perPage}
-                        onPageChange={setCurrentPage}
-                    />
-                </div>
-
-                {selectedSubscription && (
-                    <SubscriptionModal
-                        subscription={selectedSubscription}
-                        onClose={() => setSelectedSubscription(null)}
-                        onStatusChange={handleStatusChange}
-                        getStatusBadgeClass={getStatusBadgeClass}
-                        formatDate={formatDate}
-                        formatCurrency={formatCurrency}
-                    />
-                )}
+                <Pagination
+                    currentPage={currentPage}
+                    subscriptions={subscriptions}
+                    perPage={perPage}
+                    onPageChange={setCurrentPage}
+                />
             </div>
-        </div>
+
+            {selectedSubscription && (
+                <SubscriptionModal
+                    subscription={selectedSubscription}
+                    onClose={() => setSelectedSubscription(null)}
+                    onStatusChange={handleStatusChange}
+                    getStatusBadgeClass={getStatusBadgeClass}
+                    formatDate={formatDate}
+                    formatCurrency={formatCurrency}
+                />
+            )}
+        </>
     );
 }

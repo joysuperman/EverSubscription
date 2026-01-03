@@ -13,8 +13,8 @@ export default function SubscriptionModal({
   }
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full max-h-[90vh] overflow-y-auto">
+    <div className="absolute inset-0 bg-current/50 flex items-center justify-center z-50 p-4">
+      <div className="bg-white rounded-lg shadow-xl max-w-2xl w-full">
         <div className="p-6 border-b border-gray-200 flex justify-between items-center">
           <h2 className="text-2xl font-bold text-gray-900">Subscription Details</h2>
           <button
@@ -26,7 +26,7 @@ export default function SubscriptionModal({
             </svg>
           </button>
         </div>
-        <div className="p-6 space-y-4">
+        <div className="p-6 space-y-4 max-h-[50vh] overflow-y-auto">
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-500">Subscription ID</label>
@@ -102,7 +102,9 @@ export default function SubscriptionModal({
               </>
             )}
           </div>
-          <div className="pt-4 border-t border-gray-200 flex gap-2">
+        </div>
+
+        <div className="p-6 border-t border-gray-200 flex gap-2">
             {subscription.status === 'active' && (
               <>
                 <button
@@ -136,8 +138,19 @@ export default function SubscriptionModal({
                 Resume Subscription
               </button>
             )}
+
+            {subscription.status === 'cancelled' && (
+              <button
+                onClick={() => {
+                  onStatusChange(subscription.id, 'delete');
+                  onClose();
+                }}
+                className="px-4 py-2 bg-red-600 text-white rounded-md hover:bg-red-700"
+              >
+                Delete
+              </button>
+            )}
           </div>
-        </div>
       </div>
     </div>
   );

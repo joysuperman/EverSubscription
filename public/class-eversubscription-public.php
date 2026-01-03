@@ -399,6 +399,60 @@ class Eversubscription_Public {
 	}
 
 	/**
+	 * Handle subscription preference form submission from thank you page.
+	 *
+	 * @since    1.0.0
+	 */
+	public function handle_subscription_preferences() {
+		if ( ! isset( $_POST['save_subscription_prefs'] ) ) {
+			return;
+		}
+
+		if ( ! wp_verify_nonce( $_POST['subscription_prefs_nonce'], 'save_subscription_preferences' ) ) {
+			wp_die( 'Security check failed' );
+		}
+
+		$order_id = absint( $_POST['order_id'] );
+		$order = wc_get_order( $order_id );
+
+		if ( ! $order ) {
+			return;
+		}
+
+		// Get per-item preferences from form
+		$auto_renew_items = isset( $_POST['auto_renew'] ) && is_array( $_POST['auto_renew'] ) ? array_map( 'absint', $_POST['auto_renew'] ) : array();
+		$auto_payment_items = isset( $_POST['auto_payment'] ) && is_array( $_POST['auto_payment'] ) ? array_map( 'absint', $_POST['auto_payment'] ) : array();
+
+		// Save preferences for each subscription item in the order
+		foreach ( $order->get_items() as $item ) {
+			$item_id = $item->get_id();
+			$product = $item->get_product();
+			
+			if ( $product && is_object( $product ) && method_exists( $product, 'get_type' ) && $product->get_type() === 'ever_subscription' ) {
+				// Get or create subscription from order
+				$subscription = Eversubscription_Subscription::get_subscription_by_order_and_product( $order_id, $product->get_id() );
+				
+				if ( $subscription ) {
+					// Save auto-renewal preference for this item
+					$auto_renew = in_array( $item_id, $auto_renew_items, true ) ? 1 : 0;
+					update_post_meta( $subscription->id, '_subscription_auto_renew', $auto_renew );
+
+					// Save auto-payment preference for this item
+					$auto_payment = in_array( $item_id, $auto_payment_items, true ) ? 1 : 0;
+					update_post_meta( $subscription->id, '_subscription_auto_payment', $auto_payment );
+				}
+			}
+		}
+
+		// Add notice
+		wc_add_notice( __( 'Subscription preferences saved successfully.', $this->plugin_name ), 'success' );
+
+		// Redirect to avoid form resubmission
+		wp_safe_redirect( wc_get_page_permalink( 'checkout' ) . '?order=' . $order_id );
+		exit;
+	}
+
+	/**
 	 * Handle subscription actions from My Account
 	 *
 	 * @since    1.0.0
@@ -447,124 +501,6 @@ class Eversubscription_Public {
 	}
 
 	/**
-	 * Display subscription details in cart totals section.
-	 *
-	 * @since    1.0.0
-	 */
-	public function display_cart_subscription_details() {
-        // Only show on actual cart page
-        if ( ! is_cart() ) {
-            return;
-        }
-
-        $cart = WC()->cart;
-        if ( ! $cart || empty( $cart->get_cart() ) ) {
-            return;
-        }
-
-		$items_rows = '';
-		$recurring_subtotal = 0.0;
-		$recurring_total = 0.0;
-		$first_payment_date = '';
-		$has_subscription = false;
-
-        foreach ( $cart->get_cart() as $cart_item ) {
-            $product = isset( $cart_item['data'] ) ? $cart_item['data'] : null;
-            if ( ! $product || ! is_object( $product ) || ! method_exists( $product, 'get_type' ) ) {
-                continue;
-            }
-
-			// For subscription products we intentionally ignore quantity (always treated as 1)
-			$orig_qty = isset( $cart_item['quantity'] ) ? intval( $cart_item['quantity'] ) : ( isset( $cart_item['qty'] ) ? intval( $cart_item['qty'] ) : 1 );
-
-			// Prefer cart item's computed line total (which accounts for discounts/taxes) when available
-			if ( isset( $cart_item['line_total'] ) ) {
-				$line_total_raw = floatval( $cart_item['line_total'] );
-			} else {
-				$line_total_raw = floatval( $product->get_price() ) * $orig_qty;
-			}
-
-			$product_name = $product->get_name();
-
-			// If this is a subscription product, include subscription-specific info
-			if ( $product->get_type() === 'ever_subscription' ) {
-				$has_subscription = true;
-
-				// For display/calculation purposes treat subscription quantity as 1
-				$qty = 1;
-
-				// Determine unit price (respect sign-up fee for guests if applicable)
-				$sign_up_fee = floatval( $product->get_meta( '_ever_subscription_sign_up_fee' ) ) ?: 0;
-				$apply_signup_fee = ( ! is_user_logged_in() && $sign_up_fee > 0 );
-				$unit_price = $apply_signup_fee ? $sign_up_fee : floatval( $product->get_price() );
-
-				$line_total = $unit_price * $qty;
-
-				$recurring_subtotal += $line_total;
-				$recurring_total += $line_total;
-
-				$billing_period = $product->get_meta( '_ever_billing_period' ) ?: 'month';
-				$trial_length = intval( $product->get_meta( '_ever_subscription_trial_length' ) ) ?: 0;
-				$trial_period = $product->get_meta( '_ever_subscription_trial_period' ) ?: 'day';
-				$billing_interval = intval( $product->get_meta( '_ever_billing_interval' ) ) ?: 1;
-				$billing_period = $product->get_meta( '_ever_billing_period' ) ?: 'month';
-				$next_date = $this->calculate_next_payment_date( $trial_length, $trial_period, $billing_interval, $billing_period );
-				if ( empty( $first_payment_date ) ) {
-					$first_payment_date = $next_date;
-				}
-
-				// If a sign-up fee exists, only guests are charged it for the first period
-				$sign_up_fee = floatval( $product->get_meta( '_ever_subscription_sign_up_fee' ) ) ?: 0;
-				$apply_signup_fee = ( ! is_user_logged_in() && $sign_up_fee > 0 );
-				$first_period_amount = $apply_signup_fee ? ( $sign_up_fee * $qty ) : $line_total;
-
-				$items_rows .= '<tr class="ever-recurring-item">';
-				$items_rows .= '<td class="ever-product-name">' . esc_html( $product_name ) . '</td>';
-				// Show sign-up fee as the displayed unit price for guests, otherwise show regular unit price
-				$display_total = $unit_price * $qty;
-				$items_rows .= '<td class="ever-product-total">' . wc_price( $display_total ) . ' <span class="subscription-details"> / ' . esc_html( $billing_period ) . '</span>';
-				if ( $next_date ) {
-					$items_rows .= '<div class="first-payment-date"><small>' . esc_html__( 'First renewal:', $this->plugin_name ) . ' ' . esc_html( $next_date );
-					if ( $apply_signup_fee ) {
-						$items_rows .= ' — ' . esc_html__( 'First payment:', $this->plugin_name ) . ' ' . wc_price( $first_period_amount );
-					}
-					$items_rows .= '</small></div>';
-				}
-				$items_rows .= '</td>';
-				$items_rows .= '</tr>'; // .ever-recurring-item
-			} else {
-				// Non-subscription products: include in the displayed list when a subscription exists
-				$items_rows .= '<tr class="cart_item">';
-				$items_rows .= '<td class="product-name">' . esc_html( $product_name ) . ' <strong class="ever-product-quantity">× ' . esc_html( $qty ) . '</strong></td>';
-				$items_rows .= '<td class="product-total">' . wc_price( $line_total ) . '</td>';
-				$items_rows .= '</tr>';
-			}
-        }
-
-		// Only output when there are subscription items
-		if ( ! $has_subscription || empty( $items_rows ) ) {
-			return;
-		}
-
-		// Output each subscription item row. Use unique classes for our rows so we don't clash
-		// with WooCommerce core classes (which may hide or replace core subtotal/total rows).
-		echo $items_rows;
-
-		echo '<tr class="ever-recurring-subtotal">';
-		echo '<th>' . esc_html__( 'Recurring Subtotal', $this->plugin_name ) . '</th>';
-		echo '<td data-title="' . esc_attr__( 'Recurring Subtotal', $this->plugin_name ) . '">' . wc_price( $recurring_subtotal ) . '</td>';
-		echo '</tr>';
-
-
-
-		echo '<tr class="ever-recurring-order-total">';
-		echo '<th>' . esc_html__( 'Recurring total', $this->plugin_name ) . '</th>';
-		echo '<td data-title="' . esc_attr__( 'Recurring total', $this->plugin_name ) . '">' . wc_price( $recurring_total );
-		echo '</td>';
-		echo '</tr>';
-    }
-
-	/**
 	 * Display subscription details before checkout payment section.
 	 *
 	 * @since    1.0.0
@@ -610,27 +546,69 @@ class Eversubscription_Public {
 	 * @since    1.0.0
 	 */
 	public function display_thankyou_subscription_details( $order_id ) {
+		static $displayed_orders = array();
+
+		// Prevent duplicate output for the same order
+		if ( in_array( $order_id, $displayed_orders, true ) ) {
+			return;
+		}
+		$displayed_orders[] = $order_id;
+
 		$order = wc_get_order( $order_id );
 		if ( ! $order ) {
 			return;
 		}
 
-		$subscription_items = array();
+		$has_subscriptions = false;
 		foreach ( $order->get_items() as $item ) {
 			$product = $item->get_product();
 			if ( $product && is_object( $product ) && method_exists( $product, 'get_type' ) && $product->get_type() === 'ever_subscription' ) {
-				$subscription_items[] = $this->get_subscription_details( $product, array( 'data' => $product, 'quantity' => $item->get_quantity() ) );
+				$has_subscriptions = true;
+				break;
 			}
 		}
 
-		if ( ! empty( $subscription_items ) ) {
-			echo '<div class="subscription-details-thankyou" style="margin: 30px 0; padding: 20px; background: #f9f9f9; border: 1px solid #e0e0e0; border-radius: 5px;">';
-			echo '<h3 style="margin-top: 0; color: #333;">' . esc_html__( 'Your Subscription Details', $this->plugin_name ) . '</h3>';
-			foreach ( $subscription_items as $details ) {
-				echo wp_kses_post( $details );
-			}
-			echo '</div>';
+		// Only render if subscriptions exist
+		if ( ! $has_subscriptions ) {
+			return;
 		}
+
+		echo '<div class="subscription-details-thankyou" style="margin: 30px 0; padding: 20px; background: #f9f9f9; border: 1px solid #e0e0e0; border-radius: 5px;">';
+		echo '<h3 style="margin-top: 0; color: #333;">' . esc_html__( 'Your Subscription Details', $this->plugin_name ) . '</h3>';
+		
+		echo '<form method="post" class="subscription-preferences-form">';
+		wp_nonce_field( 'save_subscription_preferences', 'subscription_prefs_nonce' );
+		echo '<input type="hidden" name="order_id" value="' . esc_attr( $order_id ) . '" />';
+
+		$item_count = 0;
+		foreach ( $order->get_items() as $item ) {
+			$product = $item->get_product();
+			if ( $product && is_object( $product ) && method_exists( $product, 'get_type' ) && $product->get_type() === 'ever_subscription' ) {
+				$item_id = $item->get_id();
+				echo wp_kses_post( $this->get_subscription_details( $product, array( 'data' => $product, 'quantity' => $item->get_quantity(), 'order_id' => $order_id, 'item_id' => $item_id ) ) );
+				
+				// Per-item preferences
+				echo '<div style="margin-top: 15px; padding: 12px; background: #fff; border-left: 3px solid #0073aa; border-radius: 3px;">';
+				echo '<p style="margin: 0 0 10px 0;"><strong>' . esc_html__( 'Preferences for this item:', $this->plugin_name ) . '</strong></p>';
+				echo '<label style="display: block; margin: 8px 0;">';
+				echo '<input type="checkbox" name="auto_renew[' . esc_attr( $item_id ) . ']" value="1" checked /> ';
+				echo esc_html__( 'Enable Auto-Renewal', $this->plugin_name );
+				echo '</label>';
+				echo '<label style="display: block; margin: 8px 0;">';
+				echo '<input type="checkbox" name="auto_payment[' . esc_attr( $item_id ) . ']" value="1" checked /> ';
+				echo esc_html__( 'Enable Auto-Payment', $this->plugin_name );
+				echo '</label>';
+				echo '</div>';
+				$item_count++;
+			}
+		}
+
+		echo '<div style="margin-top: 20px; text-align: right;">';
+		echo '<button type="submit" class="button button-primary" name="save_subscription_prefs">' . esc_html__( 'Save All Preferences', $this->plugin_name ) . '</button>';
+		echo '</div>';
+		
+		echo '</form>';
+		echo '</div>';
 	}
 
 
@@ -747,5 +725,3 @@ class Eversubscription_Public {
 	}
 
 }
-
-
