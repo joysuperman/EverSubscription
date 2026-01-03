@@ -76,6 +76,7 @@ class Eversubscription {
 
 		$this->load_dependencies();
 		$this->set_locale();
+		$this->define_api_hooks();
 		$this->define_admin_hooks();
 		$this->define_public_hooks();
 
@@ -153,6 +154,15 @@ class Eversubscription {
 
 	}
 
+
+	private function define_api_hooks() {
+		$plugin_api = new Eversubscription_API( $this->get_plugin_name(), $this->get_version() );
+
+		// Register REST API routes
+		$this->loader->add_action('rest_api_init', $plugin_api, 'eversubscription_register_api_routes');
+
+	}
+
 	/**
 	 * Register all of the hooks related to the admin area functionality
 	 * of the plugin.
@@ -176,16 +186,14 @@ class Eversubscription {
 
 		// Save the fields
 		$this->loader->add_action('woocommerce_admin_process_product_object',$plugin_admin,'ever_subscription_save_product_data');
-
-		// Register REST API routes
-		add_action('rest_api_init', 'eversubscription_register_api_routes');
-
+		$this->loader->add_action( 'woocommerce_checkout_order_processed', $plugin_admin, 'eversubscription_create_subscription_from_order' );
 		// Handle subscription creation on order completion
-		add_action('woocommerce_order_status_completed', 'eversubscription_create_subscription_from_order');
-		add_action('woocommerce_order_status_processing', 'eversubscription_create_subscription_from_order');
+		$this->loader->add_action('woocommerce_order_status_completed', $plugin_admin, 'eversubscription_create_subscription_from_order');
+		$this->loader->add_action('woocommerce_order_status_processing', $plugin_admin, 'eversubscription_create_subscription_from_order');
 
 		// Cron job for recurring payments
-		add_action('ever_subscription_process_recurring_payments', 'eversubscription_process_recurring_payments');
+		$this->loader->add_action('ever_subscription_process_recurring_payments', $plugin_admin, 'eversubscription_process_recurring_payments');
+
 	}
 
 	/**
@@ -220,6 +228,11 @@ class Eversubscription {
 		$this->loader->add_filter( 'woocommerce_cart_item_price', $plugin_public, 'subscription_cart_item_price', 10, 3 );
 		$this->loader->add_filter( 'woocommerce_get_item_data', $plugin_public, 'subscription_get_item_data', 10, 2 );
 
+		// Use saved settings to change button text and checkout button when appropriate
+		$this->loader->add_filter( 'woocommerce_product_single_add_to_cart_text', $plugin_public, 'filter_single_add_to_cart_text', 10, 2 );
+		$this->loader->add_filter( 'woocommerce_product_add_to_cart_text', $plugin_public, 'filter_archive_add_to_cart_text', 10, 2 );
+		$this->loader->add_filter( 'woocommerce_order_button_text', $plugin_public, 'filter_order_button_text' );
+
 		// Cart and checkout totals with subscription details - using correct hooks
 		$this->loader->add_action( 'woocommerce_review_order_before_payment', $plugin_public, 'display_checkout_subscription_details' );
 
@@ -229,11 +242,14 @@ class Eversubscription {
 		// Handle subscription preference form submission
 		$this->loader->add_action( 'init', $plugin_public, 'handle_subscription_preferences' );
 
+
 		// My Account subscriptions
-		$this->loader->add_action( 'init', $plugin_public, 'add_subscriptions_endpoint' );
+		$this->loader->add_action( 'init', $plugin_public, 'register_my_account_endpoint' );
 		$this->loader->add_filter( 'woocommerce_account_menu_items', $plugin_public, 'add_subscriptions_menu_item' );
+		// Use 'woocommerce_account_subscriptions_endpoint' instead of 'ever-subscriptions'
 		$this->loader->add_action( 'woocommerce_account_subscriptions_endpoint', $plugin_public, 'display_subscriptions_content' );
 		$this->loader->add_action( 'template_redirect', $plugin_public, 'handle_subscription_actions' );
+		
 
 	}
 

@@ -51,12 +51,6 @@ class Eversubscription_Admin {
 
 		$this->plugin_name = $plugin_name;
 		$this->version = $version;
-
-		// Register frontend My Account subscription endpoint and menu item
-		add_action( 'init', [ $this, 'register_my_account_endpoint' ] );
-		add_filter( 'woocommerce_account_menu_items', [ $this, 'add_my_account_menu_item' ], 10, 1 );
-		add_action( 'woocommerce_account_subscriptions_endpoint', [ $this, 'subscriptions_endpoint_content' ] );
-
 	}
 
 	/**
@@ -124,9 +118,11 @@ class Eversubscription_Admin {
 			);
 			
 			// Crucial: Provide the correct REST root
+			$roles = function_exists( 'wp_roles' ) ? wp_roles()->get_names() : array();
 			wp_localize_script( $handle, 'eversubscriptionApi', array(
 				'root'  => esc_url_raw( rest_url() ), // Base WP-JSON URL
 				'nonce' => wp_create_nonce( 'wp_rest' ),
+				'roles' => $roles,
 			) );
 		}
 
@@ -344,6 +340,48 @@ class Eversubscription_Admin {
 	}
 
 	/**
+	 * Create subscription from order
+	 *
+	 * @param int $order_id Order ID
+	 * @since    1.0.0
+	 */
+	function eversubscription_create_subscription_from_order( $order_id ) {
+		$order = wc_get_order( $order_id );
+		if ( ! $order ) {
+			return;
+		}
+
+		// Check if subscription already created for this order
+		$existing_subscription = get_post_meta( $order_id, '_ever_subscription_created', true );
+		if ( $existing_subscription ) {
+			return;
+		}
+
+		foreach ( $order->get_items() as $item ) {
+			$product = $item->get_product();
+			if ( $product && $product->get_type() === 'ever_subscription' ) {
+				$user_id = $order->get_user_id();
+				if ( ! $user_id ) {
+					$user_id = $order->get_customer_id();
+				}
+
+				if ( $user_id ) {
+					$subscription_id = Eversubscription_Subscription::create_subscription(
+						$order_id,
+						$product->get_id(),
+						$user_id
+					);
+
+					if ( $subscription_id ) {
+						update_post_meta( $order_id, '_ever_subscription_created', true );
+						update_post_meta( $order_id, '_ever_subscription_id', $subscription_id );
+					}
+				}
+			}
+		}
+	}
+
+	/**
 	 * Save custom subscription product data
 	 *
 	 * Handles sanitization and storage of subscription fields
@@ -445,87 +483,34 @@ class Eversubscription_Admin {
 	}
 
 	/**
-	 * Register the "subscriptions" My Account endpoint.
-	 */
-	public function register_my_account_endpoint() {
-		add_rewrite_endpoint( 'subscriptions', EP_PAGES );
-	}
-
-	/**
-	 * Insert the Subscriptions item into the My Account menu.
+	 * Cron handler for processing recurring payments.
 	 *
-	 * @param array $items Current menu items
-	 * @return array Modified items
+	 * Uses existing procedural function if available, otherwise falls back
+	 * to calling the subscription class directly.
+	 *
+	 * @since 1.0.0
 	 */
-	public function add_my_account_menu_item( $items ) {
-		$new_items = array();
-		foreach ( $items as $key => $label ) {
-			$new_items[ $key ] = $label;
-			if ( 'orders' === $key ) {
-				$new_items['subscriptions'] = __( 'Subscriptions', $this->plugin_name );
-			}
-		}
-		return $new_items;
-	}
-
-	/**
-	 * Render the Subscriptions endpoint content on My Account page.
-	 */
-	public function subscriptions_endpoint_content() {
-		if ( ! is_user_logged_in() ) {
-			echo '<p>' . esc_html__( 'Please log in to view your subscriptions.', 'woocommerce' ) . '</p>';
+	public function eversubscription_process_recurring_payments() {
+		if ( function_exists( 'eversubscription_process_recurring_payments' ) ) {
+			eversubscription_process_recurring_payments();
 			return;
 		}
 
-		$customer_id = get_current_user_id();
-		$orders = wc_get_orders( array( 'customer_id' => $customer_id, 'limit' => -1 ) );
+		global $wpdb;
+		$table_name = $wpdb->prefix . 'ever_subscriptions';
 
-		$found = false;
-		echo '<h2>' . esc_html__( 'Your Subscriptions', $this->plugin_name ) . '</h2>';
-		echo '<table class="shop_table shop_table_responsive my_account_subscriptions"><thead><tr>' .
-			'<th>' . esc_html__( 'Product', $this->plugin_name ) . '</th>' .
-			'<th>' . esc_html__( 'Order', $this->plugin_name ) . '</th>' .
-			'<th>' . esc_html__( 'Price', $this->plugin_name ) . '</th>' .
-			'<th>' . esc_html__( 'Billing', $this->plugin_name ) . '</th>' .
-			'<th>' . esc_html__( 'Status', $this->plugin_name ) . '</th>' .
-			'</tr></thead><tbody>';
+		$now = current_time( 'mysql' );
+		$subscriptions = $wpdb->get_results(
+			$wpdb->prepare(
+				"SELECT id FROM $table_name WHERE status = 'active' AND next_payment_date <= %s",
+				$now
+			)
+		);
 
-		if ( empty( $orders ) ) {
-			echo '<tr><td colspan="5">' . esc_html__( 'No subscriptions found.', $this->plugin_name ) . '</td></tr>';
-		} else {
-			foreach ( $orders as $order ) {
-				foreach ( $order->get_items() as $item ) {
-					$product = $item->get_product();
-					if ( ! $product ) {
-						continue;
-					}
-					if ( 'ever_subscription' !== $product->get_type() ) {
-						continue;
-					}
-					$found = true;
-					$product_name = $item->get_name();
-					$order_link = $order->get_view_order_url();
-					$regular = $product->get_meta( '_ever_subscription_price' );
-					$price_html = $regular ? wc_price( $regular ) : wc_price( $product->get_price() );
-					$interval = $product->get_meta( '_ever_billing_interval' ) ?: '1';
-					$period = $product->get_meta( '_ever_billing_period' ) ?: 'month';
-					$billing = sprintf( '%s %s', esc_html( $interval ), esc_html( $period ) );
-					$status = ucfirst( $order->get_status() );
-
-					echo '<tr>';
-					echo '<td data-title="' . esc_attr__( 'Product', $this->plugin_name ) . '">' . esc_html( $product_name ) . '</td>';
-					echo '<td data-title="' . esc_attr__( 'Order', $this->plugin_name ) . '"><a href="' . esc_url( $order_link ) . '">' . esc_html( $order->get_order_number() ) . '</a><br/><small>' . esc_html( $order->get_date_created() ? $order->get_date_created()->date_i18n( wc_date_format() . ' ' . wc_time_format() ) : '' ) . '</small></td>';
-					echo '<td data-title="' . esc_attr__( 'Price', $this->plugin_name ) . '">' . wp_kses_post( $price_html ) . '</td>';
-					echo '<td data-title="' . esc_attr__( 'Billing', $this->plugin_name ) . '">' . esc_html( $billing ) . '</td>';
-					echo '<td data-title="' . esc_attr__( 'Status', $this->plugin_name ) . '">' . esc_html( $status ) . '</td>';
-					echo '</tr>';
-				}
-			}
-			if ( ! $found ) {
-				echo '<tr><td colspan="5">' . esc_html__( 'No subscription products found in your orders.', $this->plugin_name ) . '</td></tr>';
+		if ( $subscriptions && class_exists( 'Eversubscription_Subscription' ) ) {
+			foreach ( $subscriptions as $subscription ) {
+				Eversubscription_Subscription::process_recurring_payment( $subscription->id );
 			}
 		}
-
-		echo '</tbody></table>';
 	}
 }

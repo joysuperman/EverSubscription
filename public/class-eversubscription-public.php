@@ -164,17 +164,74 @@ class Eversubscription_Public {
 			echo '<p><strong>' . esc_html__( 'Free Trial:', $this->plugin_name ) . '</strong> ' . esc_html( $trial_length . ' ' . $trial_period . '(s)' ) . '</p>';
 		}
 
-		// Add a simple Subscribe (add to cart) button on the product page for this subscription product.
+			// Add a simple Subscribe (add to cart) button on the product page for this subscription product.
 		if ( method_exists( $product, 'is_purchasable' ) && $product->is_purchasable() && $product->is_in_stock() ) {
 			echo '<div class="ever-subscribe-action" style="margin-top:12px;">';
 			echo '<form class="cart" action="' . esc_url( wc_get_cart_url() ) . '" method="post">';
 			echo '<input type="hidden" name="add-to-cart" value="' . esc_attr( $product->get_id() ) . '" />';
-			echo '<button type="submit" class="single_add_to_cart_button button alt">' . esc_html__( 'Subscribe', $this->plugin_name ) . '</button>';
+				$add_text = get_option( 'eversubscription_add_to_cart_button_text', '' );
+				if ( empty( $add_text ) ) {
+					$add_text = __( 'Subscribe', $this->plugin_name );
+				}
+				echo '<button type="submit" class="single_add_to_cart_button button alt">' . esc_html( $add_text ) . '</button>';
 			echo '</form>';
 			echo '</div>';
 		}
 
 		echo '</div>';
+	}
+
+	/**
+	 * Filter single product add to cart text.
+	 */
+	public function filter_single_add_to_cart_text( $text, $product = null ) {
+		if ( $product && is_object( $product ) && method_exists( $product, 'get_type' ) && $product->get_type() === 'ever_subscription' ) {
+			$custom = get_option( 'eversubscription_add_to_cart_button_text', '' );
+			if ( $custom ) {
+				return $custom;
+			}
+		}
+		return $text;
+	}
+
+	/**
+	 * Filter archive/add to cart text (loop).
+	 */
+	public function filter_archive_add_to_cart_text( $text, $product = null ) {
+		if ( $product && is_object( $product ) && method_exists( $product, 'get_type' ) && $product->get_type() === 'ever_subscription' ) {
+			$custom = get_option( 'eversubscription_add_to_cart_button_text', '' );
+			if ( $custom ) {
+				return $custom;
+			}
+		}
+		return $text;
+	}
+
+	/**
+	 * Filter checkout order button text.
+	 */
+	public function filter_order_button_text( $text ) {
+		$custom = get_option( 'eversubscription_order_button_text', '' );
+		if ( $custom && $this->cart_has_subscription() ) {
+			return $custom;
+		}
+		return $text;
+	}
+
+	/**
+	 * Helper: check if cart contains any ever_subscription products
+	 */
+	protected function cart_has_subscription() {
+		if ( ! WC()->cart ) {
+			return false;
+		}
+		foreach ( WC()->cart->get_cart() as $cart_item ) {
+			$product = isset( $cart_item['data'] ) ? $cart_item['data'] : null;
+			if ( $product && is_object( $product ) && method_exists( $product, 'get_type' ) && $product->get_type() === 'ever_subscription' ) {
+				return true;
+			}
+		}
+		return false;
 	}
 
 	public function subscription_modification_price( $price, $product = null ) {
@@ -310,95 +367,6 @@ class Eversubscription_Public {
 	}
 
 	/**
-	 * Add subscription endpoint to My Account
-	 *
-	 * @since    1.0.0
-	 */
-	public function add_subscriptions_endpoint() {
-		add_rewrite_endpoint( 'subscriptions', EP_ROOT | EP_PAGES );
-	}
-
-	/**
-	 * Add subscriptions menu item to My Account
-	 *
-	 * @param array $items Menu items
-	 * @return array Modified menu items
-	 * @since    1.0.0
-	 */
-	public function add_subscriptions_menu_item( $items ) {
-		$items['subscriptions'] = __( 'Subscriptions', $this->plugin_name );
-		return $items;
-	}
-
-	/**
-	 * Display subscriptions content in My Account
-	 *
-	 * @since    1.0.0
-	 */
-	public function display_subscriptions_content() {
-		if ( ! is_user_logged_in() ) {
-			return;
-		}
-
-		$user_id = get_current_user_id();
-		$subscriptions = Eversubscription_Subscription::get_user_subscriptions( $user_id );
-
-		echo '<div class="woocommerce-MyAccount-subscriptions">';
-		echo '<h2>' . esc_html__( 'My Subscriptions', $this->plugin_name ) . '</h2>';
-
-		if ( empty( $subscriptions ) ) {
-			echo '<p>' . esc_html__( 'You have no active subscriptions.', $this->plugin_name ) . '</p>';
-		} else {
-			echo '<table class="shop_table shop_table_responsive my_account_subscriptions">';
-			echo '<thead>';
-			echo '<tr>';
-			echo '<th class="subscription-id">' . esc_html__( 'ID', $this->plugin_name ) . '</th>';
-			echo '<th class="subscription-product">' . esc_html__( 'Product', $this->plugin_name ) . '</th>';
-			echo '<th class="subscription-status">' . esc_html__( 'Status', $this->plugin_name ) . '</th>';
-			echo '<th class="subscription-next-payment">' . esc_html__( 'Next Payment', $this->plugin_name ) . '</th>';
-			echo '<th class="subscription-actions">' . esc_html__( 'Actions', $this->plugin_name ) . '</th>';
-			echo '</tr>';
-			echo '</thead>';
-			echo '<tbody>';
-
-			foreach ( $subscriptions as $subscription ) {
-				$product = wc_get_product( $subscription->product_id );
-				$product_name = $product ? $product->get_name() : __( 'Product not found', $this->plugin_name );
-
-				echo '<tr class="subscription">';
-				echo '<td class="subscription-id" data-title="' . esc_attr__( 'ID', $this->plugin_name ) . '">#' . esc_html( $subscription->id ) . '</td>';
-				echo '<td class="subscription-product" data-title="' . esc_attr__( 'Product', $this->plugin_name ) . '">' . esc_html( $product_name ) . '</td>';
-				echo '<td class="subscription-status" data-title="' . esc_attr__( 'Status', $this->plugin_name ) . '">';
-				echo '<span class="status-' . esc_attr( $subscription->status ) . '">' . esc_html( ucfirst( $subscription->status ) ) . '</span>';
-				echo '</td>';
-				echo '<td class="subscription-next-payment" data-title="' . esc_attr__( 'Next Payment', $this->plugin_name ) . '">';
-				if ( $subscription->next_payment_date ) {
-					echo esc_html( date_i18n( get_option( 'date_format' ), strtotime( $subscription->next_payment_date ) ) );
-				} else {
-					echo '—';
-				}
-				echo '</td>';
-				echo '<td class="subscription-actions" data-title="' . esc_attr__( 'Actions', $this->plugin_name ) . '">';
-
-				if ( $subscription->status === 'active' ) {
-					echo '<a href="' . esc_url( wp_nonce_url( add_query_arg( array( 'ever_subscription_action' => 'pause', 'subscription_id' => $subscription->id ) ), 'ever_subscription_action' ) ) . '" class="button pause">' . esc_html__( 'Pause', $this->plugin_name ) . '</a> ';
-					echo '<a href="' . esc_url( wp_nonce_url( add_query_arg( array( 'ever_subscription_action' => 'cancel', 'subscription_id' => $subscription->id ) ), 'ever_subscription_action' ) ) . '" class="button cancel">' . esc_html__( 'Cancel', $this->plugin_name ) . '</a>';
-				} elseif ( $subscription->status === 'on-hold' ) {
-					echo '<a href="' . esc_url( wp_nonce_url( add_query_arg( array( 'ever_subscription_action' => 'resume', 'subscription_id' => $subscription->id ) ), 'ever_subscription_action' ) ) . '" class="button resume">' . esc_html__( 'Resume', $this->plugin_name ) . '</a>';
-				}
-
-				echo '</td>';
-				echo '</tr>';
-			}
-
-			echo '</tbody>';
-			echo '</table>';
-		}
-
-		echo '</div>';
-	}
-
-	/**
 	 * Handle subscription preference form submission from thank you page.
 	 *
 	 * @since    1.0.0
@@ -452,53 +420,7 @@ class Eversubscription_Public {
 		exit;
 	}
 
-	/**
-	 * Handle subscription actions from My Account
-	 *
-	 * @since    1.0.0
-	 */
-	public function handle_subscription_actions() {
-		if ( ! isset( $_GET['ever_subscription_action'] ) || ! isset( $_GET['subscription_id'] ) ) {
-			return;
-		}
-
-		if ( ! wp_verify_nonce( $_GET['_wpnonce'], 'ever_subscription_action' ) ) {
-			return;
-		}
-
-		if ( ! is_user_logged_in() ) {
-			return;
-		}
-
-		$subscription_id = absint( $_GET['subscription_id'] );
-		$action = sanitize_text_field( $_GET['ever_subscription_action'] );
-		$user_id = get_current_user_id();
-
-		$subscription = Eversubscription_Subscription::get_subscription( $subscription_id );
-
-		if ( ! $subscription || $subscription->user_id != $user_id ) {
-			wc_add_notice( __( 'Invalid subscription.', $this->plugin_name ), 'error' );
-			return;
-		}
-
-		switch ( $action ) {
-			case 'pause':
-				Eversubscription_Subscription::pause_subscription( $subscription_id );
-				wc_add_notice( __( 'Subscription paused.', $this->plugin_name ), 'success' );
-				break;
-			case 'resume':
-				Eversubscription_Subscription::resume_subscription( $subscription_id );
-				wc_add_notice( __( 'Subscription resumed.', $this->plugin_name ), 'success' );
-				break;
-			case 'cancel':
-				Eversubscription_Subscription::cancel_subscription( $subscription_id );
-				wc_add_notice( __( 'Subscription cancelled.', $this->plugin_name ), 'success' );
-				break;
-		}
-
-		wp_safe_redirect( wc_get_endpoint_url( 'subscriptions', '', wc_get_page_permalink( 'myaccount' ) ) );
-		exit;
-	}
+	
 
 	/**
 	 * Display subscription details before checkout payment section.
@@ -722,6 +644,149 @@ class Eversubscription_Public {
 		$start_date->add( new DateInterval( $interval_spec ) );
 
 		return $start_date->format( get_option( 'date_format' ) );
+	}
+
+
+
+
+	/**
+	 * Register the "subscriptions" My Account endpoint.
+	 */
+	public function register_my_account_endpoint() {
+		// Change 'ever-subscriptions' to 'subscriptions'
+		add_rewrite_endpoint( 'subscriptions', EP_ROOT | EP_PAGES );
+	}
+	/**
+	 * Insert the Subscriptions item into the My Account menu.
+	 *
+	 * @param array $items Current menu items
+	 * @return array Modified items
+	 */
+	public function add_subscriptions_menu_item( $items ) {
+		$new_items = array();
+		foreach ( $items as $key => $label ) {
+			$new_items[ $key ] = $label;
+			if ( 'orders' === $key ) {
+				$new_items['subscriptions'] = __( 'Subscriptions', $this->plugin_name );
+			}
+		}
+		return $new_items;
+	}
+
+	/**
+	 * Display subscriptions content in My Account
+	 *
+	 * @since    1.0.0
+	 */
+	public function display_subscriptions_content() {
+		if ( ! is_user_logged_in() ) {
+			return;
+		}
+
+		$user_id = get_current_user_id();
+		$subscriptions = Eversubscription_Subscription::get_user_subscriptions( $user_id );
+
+		echo '<div class="woocommerce-MyAccount-subscriptions">';
+		echo '<h2>' . esc_html__( 'My Subscriptions', $this->plugin_name ) . '</h2>';
+
+		if ( empty( $subscriptions ) ) {
+			echo '<p>' . esc_html__( 'You have no active subscriptions.', $this->plugin_name ) . '</p>';
+		} else {
+			echo '<table class="shop_table shop_table_responsive my_account_subscriptions">';
+			echo '<thead>';
+			echo '<tr>';
+			echo '<th class="subscription-id">' . esc_html__( 'ID', $this->plugin_name ) . '</th>';
+			echo '<th class="subscription-product">' . esc_html__( 'Product', $this->plugin_name ) . '</th>';
+			echo '<th class="subscription-status">' . esc_html__( 'Status', $this->plugin_name ) . '</th>';
+			echo '<th class="subscription-next-payment">' . esc_html__( 'Next Payment', $this->plugin_name ) . '</th>';
+			echo '<th class="subscription-actions">' . esc_html__( 'Actions', $this->plugin_name ) . '</th>';
+			echo '</tr>';
+			echo '</thead>';
+			echo '<tbody>';
+
+			foreach ( $subscriptions as $subscription ) {
+				$product = wc_get_product( $subscription->product_id );
+				$product_name = $product ? $product->get_name() : __( 'Product not found', $this->plugin_name );
+
+				echo '<tr class="subscription">';
+				echo '<td class="subscription-id" data-title="' . esc_attr__( 'ID', $this->plugin_name ) . '">#' . esc_html( $subscription->id ) . '</td>';
+				echo '<td class="subscription-product" data-title="' . esc_attr__( 'Product', $this->plugin_name ) . '">' . esc_html( $product_name ) . '</td>';
+				echo '<td class="subscription-status" data-title="' . esc_attr__( 'Status', $this->plugin_name ) . '">';
+				echo '<span class="status-' . esc_attr( $subscription->status ) . '">' . esc_html( ucfirst( $subscription->status ) ) . '</span>';
+				echo '</td>';
+				echo '<td class="subscription-next-payment" data-title="' . esc_attr__( 'Next Payment', $this->plugin_name ) . '">';
+				if ( $subscription->next_payment_date ) {
+					echo esc_html( date_i18n( get_option( 'date_format' ), strtotime( $subscription->next_payment_date ) ) );
+				} else {
+					echo '—';
+				}
+				echo '</td>';
+				echo '<td class="subscription-actions" data-title="' . esc_attr__( 'Actions', $this->plugin_name ) . '">';
+
+				if ( $subscription->status === 'active' ) {
+					echo '<a href="' . esc_url( wp_nonce_url( add_query_arg( array( 'ever_subscription_action' => 'pause', 'subscription_id' => $subscription->id ) ), 'ever_subscription_action' ) ) . '" class="button pause">' . esc_html__( 'Pause', $this->plugin_name ) . '</a> ';
+					echo '<a href="' . esc_url( wp_nonce_url( add_query_arg( array( 'ever_subscription_action' => 'cancel', 'subscription_id' => $subscription->id ) ), 'ever_subscription_action' ) ) . '" class="button cancel">' . esc_html__( 'Cancel', $this->plugin_name ) . '</a>';
+				} elseif ( $subscription->status === 'on-hold' ) {
+					echo '<a href="' . esc_url( wp_nonce_url( add_query_arg( array( 'ever_subscription_action' => 'resume', 'subscription_id' => $subscription->id ) ), 'ever_subscription_action' ) ) . '" class="button resume">' . esc_html__( 'Resume', $this->plugin_name ) . '</a>';
+				}
+
+				echo '</td>';
+				echo '</tr>';
+			}
+
+			echo '</tbody>';
+			echo '</table>';
+		}
+
+		echo '</div>';
+	}
+
+	/**
+	 * Handle subscription actions from My Account
+	 *
+	 * @since    1.0.0
+	 */
+	public function handle_subscription_actions() {
+		if ( ! isset( $_GET['ever_subscription_action'] ) || ! isset( $_GET['subscription_id'] ) ) {
+			return;
+		}
+
+		if ( ! wp_verify_nonce( $_GET['_wpnonce'], 'ever_subscription_action' ) ) {
+			return;
+		}
+
+		if ( ! is_user_logged_in() ) {
+			return;
+		}
+
+		$subscription_id = absint( $_GET['subscription_id'] );
+		$action = sanitize_text_field( $_GET['ever_subscription_action'] );
+		$user_id = get_current_user_id();
+
+		$subscription = Eversubscription_Subscription::get_subscription( $subscription_id );
+
+		if ( ! $subscription || $subscription->user_id != $user_id ) {
+			wc_add_notice( __( 'Invalid subscription.', $this->plugin_name ), 'error' );
+			return;
+		}
+
+		switch ( $action ) {
+			case 'pause':
+				Eversubscription_Subscription::pause_subscription( $subscription_id );
+				wc_add_notice( __( 'Subscription paused.', $this->plugin_name ), 'success' );
+				break;
+			case 'resume':
+				Eversubscription_Subscription::resume_subscription( $subscription_id );
+				wc_add_notice( __( 'Subscription resumed.', $this->plugin_name ), 'success' );
+				break;
+			case 'cancel':
+				Eversubscription_Subscription::cancel_subscription( $subscription_id );
+				wc_add_notice( __( 'Subscription cancelled.', $this->plugin_name ), 'success' );
+				break;
+		}
+
+		wp_safe_redirect( wc_get_endpoint_url( 'subscriptions', '', wc_get_page_permalink( 'myaccount' ) ) );
+		exit;
 	}
 
 }
