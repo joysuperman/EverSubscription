@@ -1,7 +1,8 @@
 import React, { useEffect, useState } from 'react';
 
 // API namespace used by the admin app
-const API_NAMESPACE = '/eversubscription/v1';
+const API_NAMESPACE = 'eversubscription/v1';
+const root = (window.eversubscriptionApi && window.eversubscriptionApi.root) ? window.eversubscriptionApi.root : '/wp-json';
 export default function Settings() {
     const [settings, setSettings] = useState({
         enabled: true,
@@ -13,7 +14,7 @@ export default function Settings() {
     const [status, setStatus] = useState('');
 
     useEffect(() => {
-        const root = (window.eversubscriptionApi && window.eversubscriptionApi.root) ? window.eversubscriptionApi.root : '/wp-json/';
+        
         fetch(root + `${API_NAMESPACE}/settings`)
             .then(res => res.json())
             .then(data => setSettings(prev => ({ ...prev, ...data })))
@@ -22,7 +23,6 @@ export default function Settings() {
 
     const save = () => {
         setStatus('saving');
-        const root = (window.eversubscriptionApi && window.eversubscriptionApi.root) ? window.eversubscriptionApi.root : '/wp-json/';
         fetch(root + `${API_NAMESPACE}/settings`, {
             method: 'POST',
             headers: {
@@ -44,7 +44,6 @@ export default function Settings() {
 
     const reset = () => {
         setStatus('resetting');
-        const root = (window.eversubscriptionApi && window.eversubscriptionApi.root) ? window.eversubscriptionApi.root : '/wp-json/';
         fetch(root + `${API_NAMESPACE}/settings`)
             .then(res => res.json())
             .then(data => {

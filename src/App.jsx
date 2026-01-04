@@ -3,6 +3,7 @@ import { Routes, Route } from "react-router-dom";
 import Navbar from './Navbar';
 import Dashboard from './Dashboard';
 import Settings from './Settings';
+import Footer from './Footer';
 
 // Define the API Namespace
 const API_NAMESPACE = '/eversubscription/v1';
@@ -40,18 +41,21 @@ const apiFetch = async (options) => {
 export default function App() {
 
     return (
-        <div className="eversubscription-admin relative p-6 bg-gray-50 min-h-screen">
-            <div className="max-w-7xl mx-auto">
-                <div className="mb-4">
-                    <h1 className="text-3xl font-bold text-gray-900 mb-2">EverSubscription Management</h1>
-                    <p className="text-gray-600">Manage all your subscription products and customers</p>
+        <>
+            <div className="eversubscription-admin relative p-6 bg-gray-50 min-h-screen">
+                <div className="container mx-auto">
+                    <div className="mb-4">
+                        <h1 className="text-3xl font-bold text-gray-900 mb-2">EverSubscription Management</h1>
+                        <p className="text-gray-600">Manage all your subscription products and customers</p>
+                    </div>
+                    <Navbar />
+                    <Routes>
+                        <Route path="/" element={<Dashboard apiFetch={apiFetch} />} />
+                        <Route path="/settings" element={<Settings apiFetch={apiFetch} />} />
+                    </Routes>
                 </div>
-                <Navbar />
-                <Routes>
-                    <Route path="/" element={<Dashboard apiFetch={apiFetch} />} />
-                    <Route path="/settings" element={<Settings apiFetch={apiFetch} />} />
-                </Routes>
             </div>
-        </div>
+            <Footer />
+        </>
     );
 }

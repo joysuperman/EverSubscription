@@ -177,15 +177,20 @@ class Eversubscription {
 		$this->loader->add_action( 'admin_enqueue_scripts', $plugin_admin, 'enqueue_styles' );
 		$this->loader->add_action( 'admin_enqueue_scripts', $plugin_admin, 'enqueue_scripts' );
 		$this->loader->add_action( 'admin_menu', $plugin_admin, 'add_plugin_admin_menu' );
-		$this->loader->add_filter('product_type_selector', $plugin_admin, 'add_woo_product_type');
+		$this->loader->add_filter( 'product_type_selector', $plugin_admin, 'add_woo_product_type' );
 		// Register product class mapping on the admin instance (method lives in admin class)
 		$this->loader->add_filter('woocommerce_product_class', $plugin_admin, 'register_product_class', 10, 4);
 		// Correct hooks for admin tab
 		$this->loader->add_filter('woocommerce_product_data_tabs', $plugin_admin, 'ever_subscription_product_tab');
+		// Register the filter to enable the tab
+		$this->loader->add_filter( 'woocommerce_product_data_tabs', $plugin_admin, 'add_variation_support_to_tabs' );
 		$this->loader->add_action('woocommerce_product_data_panels', $plugin_admin, 'ever_subscription_product_tab_content');
 
 		// Save the fields
 		$this->loader->add_action('woocommerce_admin_process_product_object',$plugin_admin,'ever_subscription_save_product_data');
+		// Variation UI and save handlers
+		$this->loader->add_action('woocommerce_variation_options_pricing', $plugin_admin, 'ever_subscription_variation_options', 10, 3);
+		$this->loader->add_action('woocommerce_save_product_variation', $plugin_admin, 'ever_subscription_save_variation', 10, 2);
 		$this->loader->add_action( 'woocommerce_checkout_order_processed', $plugin_admin, 'eversubscription_create_subscription_from_order' );
 		// Handle subscription creation on order completion
 		$this->loader->add_action('woocommerce_order_status_completed', $plugin_admin, 'eversubscription_create_subscription_from_order');
@@ -218,39 +223,35 @@ class Eversubscription {
 		$this->loader->add_action( 'wp_enqueue_scripts', $plugin_public, 'enqueue_scripts' );
 
 		// Keep internal product prices numeric; modify displayed price HTML instead
-		$this->loader->add_filter( 'woocommerce_get_price_html', $plugin_public, 'subscription_price_html', 10, 2 );
-		$this->loader->add_action( 'woocommerce_before_calculate_totals', $plugin_public, 'apply_signup_fee_to_cart_items', 20 );
-
+		$this->loader->add_filter( 'woocommerce_get_price_html', $plugin_public, 'eversubscription_subscription_price_html', 10, 2 );
+		$this->loader->add_action( 'woocommerce_cart_calculate_fees', $plugin_public, 'eversubscription_apply_trial_discount_fee' );
 
 		// Display subscription info on product page
-		$this->loader->add_action( 'woocommerce_single_product_summary', $plugin_public, 'display_subscription_info', 25 );
+		$this->loader->add_action( 'woocommerce_single_product_summary', $plugin_public, 'eversubscription_display_subscription_info', 25 );
 		// Show billing period on cart, checkout and order price display and item meta
-		$this->loader->add_filter( 'woocommerce_cart_item_price', $plugin_public, 'subscription_cart_item_price', 10, 3 );
-		$this->loader->add_filter( 'woocommerce_get_item_data', $plugin_public, 'subscription_get_item_data', 10, 2 );
+		$this->loader->add_filter( 'woocommerce_get_item_data', $plugin_public, 'eversubscription_subscription_get_item_data', 10, 2 );
 
 		// Use saved settings to change button text and checkout button when appropriate
-		$this->loader->add_filter( 'woocommerce_product_single_add_to_cart_text', $plugin_public, 'filter_single_add_to_cart_text', 10, 2 );
-		$this->loader->add_filter( 'woocommerce_product_add_to_cart_text', $plugin_public, 'filter_archive_add_to_cart_text', 10, 2 );
-		$this->loader->add_filter( 'woocommerce_order_button_text', $plugin_public, 'filter_order_button_text' );
+		$this->loader->add_filter( 'woocommerce_product_single_add_to_cart_text', $plugin_public, 'eversubscription_product_add_to_cart_text', 10, 2 );
+		$this->loader->add_filter( 'woocommerce_product_add_to_cart_text', $plugin_public, 'eversubscription_product_add_to_cart_text', 10, 2 );
+		$this->loader->add_filter( 'woocommerce_order_button_text', $plugin_public, 'eversubscription_order_button_text', 15 );
 
 		// Cart and checkout totals with subscription details - using correct hooks
-		$this->loader->add_action( 'woocommerce_review_order_before_payment', $plugin_public, 'display_checkout_subscription_details' );
+		$this->loader->add_action( 'woocommerce_review_order_before_payment', $plugin_public, 'eversubscription_display_checkout_subscription_details' );
 
 		// Thank you / Order received page - display after order details
-		$this->loader->add_action( 'woocommerce_order_details_after_order_table', $plugin_public, 'display_thankyou_subscription_details' );
+		$this->loader->add_action( 'woocommerce_order_details_after_order_table', $plugin_public, 'eversubscription_display_thankyou_subscription_details' );
 		
 		// Handle subscription preference form submission
-		$this->loader->add_action( 'init', $plugin_public, 'handle_subscription_preferences' );
+		$this->loader->add_action( 'init', $plugin_public, 'eversubscription_handle_subscription_preferences' );
 
 
 		// My Account subscriptions
-		$this->loader->add_action( 'init', $plugin_public, 'register_my_account_endpoint' );
-		$this->loader->add_filter( 'woocommerce_account_menu_items', $plugin_public, 'add_subscriptions_menu_item' );
-		// Use 'woocommerce_account_subscriptions_endpoint' instead of 'ever-subscriptions'
-		$this->loader->add_action( 'woocommerce_account_subscriptions_endpoint', $plugin_public, 'display_subscriptions_content' );
-		$this->loader->add_action( 'template_redirect', $plugin_public, 'handle_subscription_actions' );
-		
-
+		$this->loader->add_action( 'init', $plugin_public, 'eversubscription_register_my_account_endpoint' );
+		$this->loader->add_filter( 'woocommerce_account_menu_items', $plugin_public, 'eversubscription_add_subscriptions_menu_item' );
+		// Display content for the subscriptions endpoint
+		$this->loader->add_action( 'woocommerce_account_subscriptions_endpoint', $plugin_public, 'eversubscription_display_subscriptions_content' );
+		$this->loader->add_action( 'template_redirect', $plugin_public, 'eversubscription_handle_subscription_actions' );
 	}
 
 	/**
@@ -300,6 +301,10 @@ class Eversubscription {
 	public function include_product_class() {
 		if ( ! class_exists( 'WC_Product_Ever_Subscription' ) ) {
 			require_once plugin_dir_path( __FILE__ ) . '/class-wc-product-ever-subscription.php';
+		}
+		// Also include variable/variation classes so WooCommerce can map them when needed
+		if ( ! class_exists( 'WC_Product_Ever_Subscription_Variable' ) ) {
+			require_once plugin_dir_path( __FILE__ ) . '/class-wc-product-ever-subscription-variable.php';
 		}
 	}
 
