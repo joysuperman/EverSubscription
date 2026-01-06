@@ -191,6 +191,7 @@ class Eversubscription {
 		// Variation UI and save handlers
 		$this->loader->add_action('woocommerce_variation_options_pricing', $plugin_admin, 'ever_subscription_variation_options', 10, 3);
 		$this->loader->add_action('woocommerce_save_product_variation', $plugin_admin, 'ever_subscription_save_variation', 10, 2);
+		$this->loader->add_filter('woocommerce_bulk_edit_variations_allowed_product_types', $plugin_admin, 'ever_subscription_variations_allowed_product_types', 10, 3);
 		$this->loader->add_action( 'woocommerce_checkout_order_processed', $plugin_admin, 'eversubscription_create_subscription_from_order' );
 		// Handle subscription creation on order completion
 		$this->loader->add_action('woocommerce_order_status_completed', $plugin_admin, 'eversubscription_create_subscription_from_order');

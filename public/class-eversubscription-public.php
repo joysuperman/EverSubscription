@@ -165,7 +165,14 @@ class Eversubscription_Public {
 	public function eversubscription_display_subscription_info() {
         global $product;
 
-		if ( ! $product || ! method_exists( $product, 'is_type' ) || ! $product->is_type( array( 'ever_subscription', 'ever_subscription_variable' ) ) ) return;
+		if ( ! $product || ! method_exists( $product, 'is_type' ) ) return;
+		if ( ! $product->is_type( array( 'ever_subscription', 'ever_subscription_variable' ) ) ) return;
+
+		// If it's variable, we stop here because the variation dropdowns 
+		// will be handled by the template we called in Step 1.
+		if ( $product->is_type( 'ever_subscription_variable' ) ) {
+			return; 
+		}
 
         $meta = [
             'price'    => $product->get_meta( '_ever_subscription_price' ),

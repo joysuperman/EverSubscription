@@ -400,6 +400,11 @@ class Eversubscription_Admin {
 		return $tabs;
 	}
 
+	public function ever_subscription_variations_allowed_product_types( $types ) {
+		$types[] = 'ever_subscription_variable';
+		return $types;
+	}
+
 	/**
 	 * Output custom product tab content
 	 *
