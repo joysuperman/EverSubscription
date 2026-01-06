@@ -62,10 +62,19 @@ class Eversubscription_Admin {
 	 * @param WC_Product_Variation $variation Variation product object
 	 */
 	public function ever_subscription_variation_options( $loop, $variation_data, $variation ) {
-        $variation_id = is_object( $variation ) ? $variation->get_id() : $variation;
-        $currency_symbol = get_woocommerce_currency_symbol();
+        $variation_id = 0;
+		if ( is_object( $variation ) ) {
+			if ( method_exists( $variation, 'get_id' ) ) {
+				$variation_id = $variation->get_id();
+			} elseif ( isset( $variation->ID ) ) {
+				$variation_id = $variation->ID;
+			}
+		} else {
+			$variation_id = $variation;
+		}
+		$currency_symbol = get_woocommerce_currency_symbol();
 
-        echo '<div class="ever_subscription_variation_settings" style="padding: 10px; border-left: 3px solid #7ed321; margin-bottom: 10px; background: #f9f9f9;">';
+        echo '<div class="ever_subscription_variation_settings">';
         echo '<strong>' . __( 'Ever Subscription Settings', $this->plugin_name ) . '</strong>';
 
         // 1. Subscription Price & Billing Interval (Row 1)
@@ -318,27 +327,43 @@ class Eversubscription_Admin {
 			return 'WC_Product_Ever_Subscription_Variable';
 		}
 
-		// If WooCommerce is asking for a variable product class, check if the product
-		// (or its parent) has the ever_subscription_variable term and return our variable class.
+		// If WooCommerce asks for 'variable', check parent product type
 		if ( 'variable' === $product_type ) {
 			$terms = wp_get_object_terms( $product_id, 'product_type', array( 'fields' => 'slugs' ) );
-			if ( is_array( $terms ) && in_array( 'ever_subscription_variable', $terms, true ) ) {
+			if ( ! is_wp_error( $terms ) && is_array( $terms ) && in_array( 'ever_subscription_variable', $terms, true ) ) {
 				return 'WC_Product_Ever_Subscription_Variable';
 			}
 		}
 
-		// Variation instances: check parent product's type for variable subscription
+		// Variation instances: check parent product's type
 		if ( 'variation' === $product_type ) {
 			$parent_id = wp_get_post_parent_id( $product_id );
 			if ( $parent_id ) {
 				$terms = wp_get_object_terms( $parent_id, 'product_type', array( 'fields' => 'slugs' ) );
-				if ( is_array( $terms ) && in_array( 'ever_subscription_variable', $terms, true ) ) {
+				if ( ! is_wp_error( $terms ) && is_array( $terms ) && in_array( 'ever_subscription_variable', $terms, true ) ) {
 					return 'WC_Product_Ever_Subscription_Variation';
 				}
 			}
 		}
 
 		return $classname;
+	}
+
+	public function eversubscription_save_post_product( $post_id ) {
+		 $product = wc_get_product($post_id);
+		if ( $product && $product->is_type('ever_subscription_variable') ) {
+			$prices = [];
+			foreach ( $product->get_children() as $child_id ) {
+				$child = wc_get_product($child_id);
+				if ( $child ) {
+					$prices[] = $child->get_price();
+				}
+			}
+			if ( $prices ) {
+				$product->set_price(min($prices));
+				$product->save();
+			}
+		}
 	}
 
 	/**
@@ -366,6 +391,15 @@ class Eversubscription_Admin {
         return $types;
     }
 
+
+	/**
+	 * Register the data store for the custom variable product type.
+	 * This prevents the array_keys() NULL error during AJAX calls.
+	 */
+	public function register_data_stores( $stores ) {
+		$stores['product-ever_subscription_variable'] = 'WC_Product_Variable_Data_Store_CPT';
+		return $stores;
+	}
 	/**
 	 * Add custom product tab
 	 *

@@ -196,7 +196,7 @@ class Eversubscription {
 		// Handle subscription creation on order completion
 		$this->loader->add_action('woocommerce_order_status_completed', $plugin_admin, 'eversubscription_create_subscription_from_order');
 		$this->loader->add_action('woocommerce_order_status_processing', $plugin_admin, 'eversubscription_create_subscription_from_order');
-
+		$this->loader->add_action('save_post_product', $plugin_admin, 'eversubscription_save_post_product', 20, 1);
 		// Cron job for recurring payments
 		$this->loader->add_action('ever_subscription_process_recurring_payments', $plugin_admin, 'eversubscription_process_recurring_payments');
 
@@ -231,7 +231,7 @@ class Eversubscription {
 		$this->loader->add_action( 'woocommerce_single_product_summary', $plugin_public, 'eversubscription_display_subscription_info', 25 );
 		// Show billing period on cart, checkout and order price display and item meta
 		$this->loader->add_filter( 'woocommerce_get_item_data', $plugin_public, 'eversubscription_subscription_get_item_data', 10, 2 );
-
+		
 		// Use saved settings to change button text and checkout button when appropriate
 		$this->loader->add_filter( 'woocommerce_product_single_add_to_cart_text', $plugin_public, 'eversubscription_product_add_to_cart_text', 10, 2 );
 		$this->loader->add_filter( 'woocommerce_product_add_to_cart_text', $plugin_public, 'eversubscription_product_add_to_cart_text', 10, 2 );
@@ -242,10 +242,11 @@ class Eversubscription {
 
 		// Thank you / Order received page - display after order details
 		$this->loader->add_action( 'woocommerce_order_details_after_order_table', $plugin_public, 'eversubscription_display_thankyou_subscription_details' );
+		$this->loader->add_action( 'woocommerce_available_variation', $plugin_public, 'eversubscription_add_variation_subscription_data', 10, 3 );
 		
 		// Handle subscription preference form submission
 		$this->loader->add_action( 'init', $plugin_public, 'eversubscription_handle_subscription_preferences' );
-
+		
 
 		// My Account subscriptions
 		$this->loader->add_action( 'init', $plugin_public, 'eversubscription_register_my_account_endpoint' );

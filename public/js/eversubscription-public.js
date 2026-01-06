@@ -28,11 +28,27 @@
 	 * Although scripts in the WordPress core, Plugins and Themes may be
 	 * practising this, we should strive to set a better example in our own work.
 	 */
-	var $rows = $('tr.ever-recurring-item, tr.ever-recurring-total, tr.ever-recurring-subtotal, tr.ever-recurring-order-total');
-	if ( $rows.length ) {
-		var $sub = $('tr.cart-subtotal').first();
-		if ( $sub.length ) {
-			$sub.before( $rows );
-		}
-	}
+
+	 / Update subscription details when a variation is found
+    $('.variations_form').on('found_variation', function(event, variation) {
+
+        if (!variation.ever_subscription) return;
+
+        var s = variation.ever_subscription;
+
+        // Format price using WooCommerce formatted price (requires WooCommerce JS settings)
+        var formattedPrice = typeof wc_price === 'function' ? wc_price(s.price) : s.price;
+        var formattedFee = typeof wc_price === 'function' ? wc_price(s.signup_fee) : s.signup_fee;
+
+        var html = `
+            <p><strong>Price:</strong> ${formattedPrice}</p>
+            <p><strong>Billing:</strong> Every ${s.interval} ${s.period}${s.interval > 1 ? 's' : ''}</p>
+            ${s.trial_l > 0 ? `<p><strong>Trial:</strong> ${s.trial_l} ${s.trial_p}${s.trial_l > 1 ? 's' : ''}</p>` : ''}
+            ${s.signup_fee > 0 ? `<p><strong>Sign-up Fee:</strong> ${formattedFee}</p>` : ''}
+            ${s.note ? `<p>${s.note}</p>` : ''}
+        `;
+
+        // Inject HTML into subscription-details container
+        $(this).find('.subscription-details').html(html);
+    });
 })( jQuery );

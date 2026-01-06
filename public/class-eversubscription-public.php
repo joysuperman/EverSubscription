@@ -95,7 +95,7 @@ class Eversubscription_Public {
 		 * class.
 		 */
 
-		wp_enqueue_script( $this->plugin_name, plugin_dir_url( __FILE__ ) . 'js/eversubscription-public.js', array( 'jquery' ), $this->version, true );
+		wp_enqueue_script( $this->plugin_name, plugin_dir_url( __FILE__ ) . 'js/eversubscription-public.js', array( 'jquery', 'wc-add-to-cart-variation' ), $this->version, true );
 
 	}
 
@@ -163,39 +163,93 @@ class Eversubscription_Public {
 	 * @since    1.0.0
 	 */
 	public function eversubscription_display_subscription_info() {
-        global $product;
+		global $product;
 
-		if ( ! $product || ! method_exists( $product, 'is_type' ) ) return;
-		if ( ! $product->is_type( array( 'ever_subscription', 'ever_subscription_variable' ) ) ) return;
-
-		// If it's variable, we stop here because the variation dropdowns 
-		// will be handled by the template we called in Step 1.
-		if ( $product->is_type( 'ever_subscription_variable' ) ) {
-			return; 
+		if ( ! $product || ! $product->is_type( array( 'ever_subscription', 'ever_subscription_variable' ) ) ) {
+			return;
 		}
 
-        $meta = [
-            'price'    => $product->get_meta( '_ever_subscription_price' ),
-            'interval' => $product->get_meta( '_ever_billing_interval' ) ?: 1,
-            'period'   => $product->get_meta( '_ever_billing_period' ) ?: 'month',
-            'trial_l'  => (int) $product->get_meta( '_ever_subscription_trial_length' ),
-            'trial_p'  => $product->get_meta( '_ever_subscription_trial_period' ) ?: 'day',
-            'fee'      => (float) $product->get_meta( '_ever_subscription_sign_up_fee' ),
-			'note'     => $product->get_meta( '_ever_aditional_note' ),
-        ];
+		/* ================================
+		* VARIABLE SUBSCRIPTION PRODUCT
+		* ================================ */
+		if ( $product->is_type( 'ever_subscription_variable' ) ) {
 
-        ?>
-        <div class="ever-subscription-info">
-            <h4><?php esc_html_e( 'Subscription Details', $this->plugin_name ); ?></h4>
-            <table>
-                <tr><td><strong><?php esc_html_e( 'Price:', $this->plugin_name ); ?></strong></td><td><?php echo wc_price( $meta['price'] ); ?> / <?php echo esc_html( $meta['interval'] > 1 ? $meta['interval'] . ' ' . $meta['period'] . 's' : $meta['period'] ); ?></td></tr>
-                <?php if ( $meta['fee'] > 0 ) : ?>
-                    <tr><td><strong><?php esc_html_e( 'Sign-up Fee:', $this->plugin_name ); ?></strong></td><td> <?php echo wc_price( $meta['fee'] ); ?></td></tr>
-                <?php endif; ?>
-                <?php if ( $meta['trial_l'] > 0 ) : ?>
-                    <tr><td><strong><?php esc_html_e( 'Free Trial:', $this->plugin_name ); ?></strong></td><td> <?php echo esc_html( $meta['trial_l'] . ' ' . $meta['trial_p'] . ( $meta['trial_l'] > 1 ? '(s)' : '' ) ); ?></td></tr>
-                <?php endif; ?>
-            </table>
+			$variations  = $product->get_available_variations() ?: [];
+			$attributes  = $product->get_variation_attributes() ?: [];
+
+			?>
+			<div class="ever-subscription-info">
+				<h4><?php esc_html_e( 'Choose Your Subscription Plan', $this->plugin_name ); ?></h4>
+
+				<form class="variations_form cart"
+					method="post"
+					data-product_id="<?php echo esc_attr( $product->get_id() ); ?>"
+					data-product_variations="<?php echo esc_attr( wp_json_encode( $variations ) ); ?>">
+
+					<?php if ( ! empty( $attributes ) ) : ?>
+						<?php foreach ( $attributes as $attribute_name => $options ) : ?>
+							<p class="form-row form-row-wide">
+								<label><?php echo wc_attribute_label( $attribute_name ); ?></label>
+								<?php 
+									// Safely render dropdown
+									wc_dropdown_variation_attribute_options( array(
+										'options' => $options,
+										'attribute' => $attribute_name,
+										'product' => $product,
+									) );
+								?>
+							</p>
+						<?php endforeach; ?>
+					<?php else : ?>
+						<p><?php esc_html_e( 'No variations available for this subscription.', $this->plugin_name ); ?></p>
+					<?php endif; ?>
+
+					<div class="single_variation">
+						<div class="subscription-details"></div>
+					</div>
+
+					<input type="hidden" name="add-to-cart" value="<?php echo esc_attr( $product->get_id() ); ?>">
+					<input type="hidden" name="product_id" value="<?php echo esc_attr( $product->get_id() ); ?>">
+					<input type="hidden" name="variation_id" class="variation_id" value="0">
+
+					<button type="submit" class="single_add_to_cart_button button alt">
+						<?php echo esc_html( get_option( 'eversubscription_add_to_cart_button_text', __( 'Subscribe', $this->plugin_name ) ) ); ?>
+					</button>
+
+				</form>
+			</div>
+			<?php
+			return;
+		}
+
+		/* ================================
+		* SIMPLE SUBSCRIPTION PRODUCT
+		* ================================ */
+		$meta = [
+			'price'    => $product->get_meta( '_ever_subscription_price' ),
+			'interval' => $product->get_meta( '_ever_billing_interval' ) ?: 1,
+			'period'   => $product->get_meta( '_ever_billing_period' ) ?: 'month',
+			'trial_l'  => (int) $product->get_meta( '_ever_subscription_trial_length' ),
+			'trial_p'  => $product->get_meta( '_ever_subscription_trial_period' ) ?: 'day',
+			'fee'      => (float) $product->get_meta( '_ever_subscription_sign_up_fee' ),
+			'note'     => $product->get_meta( '_ever_aditional_note' ),
+		];
+
+		?>
+		<div class="ever-subscription-info">
+			<h4><?php esc_html_e( 'Subscription Details', $this->plugin_name ); ?></h4>
+			<table>
+				<tr>
+					<td><strong><?php esc_html_e( 'Price:', $this->plugin_name ); ?></strong></td>
+					<td><?php echo wc_price( $meta['price'] ); ?> / <?php echo esc_html( $meta['interval'] > 1 ? $meta['interval'] . ' ' . $meta['period'] . 's' : $meta['period'] ); ?></td>
+				</tr>
+				<?php if ( $meta['fee'] > 0 ) : ?>
+					<tr><td><strong><?php esc_html_e( 'Sign-up Fee:', $this->plugin_name ); ?></strong></td><td> <?php echo wc_price( $meta['fee'] ); ?></td></tr>
+				<?php endif; ?>
+				<?php if ( $meta['trial_l'] > 0 ) : ?>
+					<tr><td><strong><?php esc_html_e( 'Free Trial:', $this->plugin_name ); ?></strong></td><td> <?php echo esc_html( $meta['trial_l'] . ' ' . $meta['trial_p'] . ( $meta['trial_l'] > 1 ? '(s)' : '' ) ); ?></td></tr>
+				<?php endif; ?>
+			</table>
 			
 			<?php if ( ! empty( $meta['note'] ) ) : ?>
 				<blockquote class="eversubscription-additional-note" style="margin: 0px; padding: 10px; background-color: #f9f9f9; border-left: 4px solid #0073aa;">
@@ -203,17 +257,41 @@ class Eversubscription_Public {
 					<?php echo esc_html( $meta['note'] ); ?>
 				</blockquote>
 			<?php endif; ?>
-            <?php if ( $product->is_purchasable() && $product->is_in_stock() ) : ?>
-                <form class="cart" action="<?php echo esc_url( wc_get_cart_url() ); ?>" method="post">
-                    <input type="hidden" name="add-to-cart" value="<?php echo esc_attr( $product->get_id() ); ?>" />
-                    <button type="submit" class="single_add_to_cart_button button alt">
-                        <?php echo esc_html( get_option( 'eversubscription_add_to_cart_button_text', __( 'Subscribe', $this->plugin_name ) ) ); ?>
-                    </button>
-                </form>
-            <?php endif; ?>
-        </div>
-        <?php
-    }
+			<?php if ( $product->is_purchasable() && $product->is_in_stock() ) : ?>
+				<form class="cart" action="<?php echo esc_url( wc_get_cart_url() ); ?>" method="post">
+					<input type="hidden" name="add-to-cart" value="<?php echo esc_attr( $product->get_id() ); ?>" />
+					<button type="submit" class="single_add_to_cart_button button alt">
+						<?php echo esc_html( get_option( 'eversubscription_add_to_cart_button_text', __( 'Subscribe', $this->plugin_name ) ) ); ?>
+					</button>
+				</form>
+			<?php endif; ?>
+		</div>
+		<?php
+	}
+
+
+	/**
+	 * Add subscription meta to variation JSON
+	 */
+	public function eversubscription_add_variation_subscription_data( $data, $product, $variation ) {
+
+		if ( ! $product || ! $product->is_type( 'ever_subscription_variable' ) ) {
+			return $data;
+		}
+
+		$data['ever_subscription'] = [
+			'price'      => $variation->get_meta('_ever_subscription_price'),
+			'interval'   => $variation->get_meta('_ever_billing_interval') ?: 1,
+			'period'     => $variation->get_meta('_ever_billing_period') ?: 'month',
+			'trial_l'    => (int) $variation->get_meta('_ever_subscription_trial_length'),
+			'trial_p'    => $variation->get_meta('_ever_subscription_trial_period') ?: 'day',
+			'signup_fee' => (float) $variation->get_meta('_ever_subscription_sign_up_fee'),
+			'note'       => $variation->get_meta('_ever_aditional_note'),
+		];
+
+		return $data;
+	}
+
 
 	/**
 	 * Filter product add to cart text.
@@ -263,22 +341,46 @@ class Eversubscription_Public {
 	 * @return string Modified price HTML
 	 */
 	public function eversubscription_subscription_price_html( $price_html, $product ) {
-		if ( ! $product || ! is_object( $product ) || ! method_exists( $product, 'get_type' ) || $product->get_type() !== 'ever_subscription' ) {
-			return $price_html;
-		}
 
-		$billing_period = $product->get_meta( '_ever_billing_period' ) ?: 'month';
-		return $price_html . ' /' . esc_html( $billing_period );
-	}
+        if ( ! $product || ! is_object( $product ) || ! method_exists( $product, 'is_type' ) ) {
+            return $price_html;
+        }
 
+        // Simple subscription
+        if ( $product->is_type( 'ever_subscription' ) ) {
+            $billing_period = $product->get_meta( '_ever_billing_period' ) ?: 'month';
+            return $price_html . ' /' . esc_html( $billing_period );
+        }
 
-	function hide_qty_for_subscriptions( $is_sold_individually, $product ) {
-		// Check if the product type is a subscription (simple or variable)
-		if ( $product->is_type( array( 'subscription', 'variable-subscription' ) ) ) {
-			return true;
-		}
-		return $is_sold_individually;
-	}
+        // Variable subscription (SAFE)
+        if ( $product->is_type( 'ever_subscription_variable' ) ) {
+
+            $prices = $product->get_variation_prices( true );
+
+            // HARD GUARD — prevents fatal error
+            if ( empty( $prices ) || empty( $prices['price'] ) || ! is_array( $prices['price'] ) ) {
+                return $price_html;
+            }
+
+            $min_price = min( $prices['price'] );
+            $max_price = max( $prices['price'] );
+
+            if ( $min_price === $max_price ) {
+                $range_html = wc_price( $min_price );
+            } else {
+                $range_html = sprintf(
+                    __( 'From: %s', 'woocommerce' ),
+                    wc_price( $min_price )
+                );
+            }
+
+            $billing_period = $product->get_meta( '_ever_billing_period' ) ?: 'month';
+
+            return $range_html . ' /' . esc_html( $billing_period );
+        }
+
+        return $price_html;
+    }
 
 	/**
 	 * Add subscription details to cart/checkout item meta display.
@@ -288,55 +390,55 @@ class Eversubscription_Public {
 	 * @return array
 	 */
 	public function eversubscription_subscription_get_item_data( $item_data, $cart_item ) {
-		$product = $cart_item['data'] ?? null;
+        $product = $cart_item['data'] ?? null;
 
-		// 1. Validate Product Object and Type
-		if ( ! is_a( $product, 'WC_Product' ) || $product->get_type() !== 'ever_subscription' ) {
-			return $item_data;
-		}
+        // 1. Validate Product Object and Type
+        if ( ! is_a( $product, 'WC_Product' ) || $product->get_type() !== 'ever_subscription' ) {
+            return $item_data;
+        }
 
-		// 2. Fetch Metadata with Defaults
-		$billing_interval = max( 1, intval( $product->get_meta( '_ever_billing_interval' ) ) );
-		$billing_period   = $product->get_meta( '_ever_billing_period' ) ?: 'month';
-		$trial_length     = intval( $product->get_meta( '_ever_subscription_trial_length' ) );
-		$trial_period     = $product->get_meta( '_ever_subscription_trial_period' ) ?: 'day';
-		
-		// Fallback price logic
-		$price = floatval( $product->get_meta( '_ever_subscription_price' ) ) ?: floatval( $product->get_price() );
+        // 2. Fetch Metadata with Defaults
+        $billing_interval = max( 1, intval( $product->get_meta( '_ever_billing_interval' ) ) );
+        $billing_period   = $product->get_meta( '_ever_billing_period' ) ?: 'month';
+        $trial_length     = intval( $product->get_meta( '_ever_subscription_trial_length' ) );
+        $trial_period     = $product->get_meta( '_ever_subscription_trial_period' ) ?: 'day';
+        
+        // Fallback price logic
+        $price = floatval( $product->get_meta( '_ever_subscription_price' ) ) ?: floatval( $product->get_price() );
 
-		// 3. Helper for Pluralization
-		$get_label = function( $value, $period ) {
-			return $value . ' ' . $period . ( $value > 1 ? 's' : '' );
-		};
+        // 3. Helper for Pluralization
+        $get_label = function( $value, $period ) {
+            return $value . ' ' . $period . ( $value > 1 ? 's' : '' );
+        };
 
-		// 4. Build Data List
-		$display_data = [
-			'Subscription' => sprintf( __( 'Every %s', $this->plugin_name ), $get_label( $billing_interval, $billing_period ) ),
-		];
+        // 4. Build Data List
+        $display_data = [
+            'Subscription' => sprintf( __( 'Every %s', $this->plugin_name ), $get_label( $billing_interval, $billing_period ) ),
+        ];
 
-		if ( $price > 0 ) {
-			$display_data['Price'] = wc_price( $price );
-		}
+        if ( $price > 0 ) {
+            $display_data['Price'] = wc_price( $price );
+        }
 
-		if ( $trial_length > 0 ) {
-			$display_data['Free Trial'] = $get_label( $trial_length, $trial_period );
-		}
+        if ( $trial_length > 0 ) {
+            $display_data['Free Trial'] = $get_label( $trial_length, $trial_period );
+        }
 
-		$next_date = $this->calculate_next_payment_date( $trial_length, $trial_period, $billing_interval, $billing_period );
-		if ( $next_date ) {
-			$display_data['Next Payment'] = $next_date;
-		}
+        $next_date = $this->calculate_next_payment_date( $trial_length, $trial_period, $billing_interval, $billing_period );
+        if ( $next_date ) {
+            $display_data['Next Payment'] = $next_date;
+        }
 
-		// 5. Merge into $item_data in WooCommerce format
-		foreach ( $display_data as $key => $value ) {
-			$item_data[] = [
-				'key'   => __( $key, $this->plugin_name ),
-				'value' => $value,
-			];
-		}
+        // 5. Merge into $item_data in WooCommerce format
+        foreach ( $display_data as $key => $value ) {
+            $item_data[] = [
+                'key'   => __( $key, $this->plugin_name ),
+                'value' => $value,
+            ];
+        }
 
-		return $item_data;
-	}
+        return $item_data;
+    }
 
 	/**
 	 * Handle subscription preference form submission from thank you page.
