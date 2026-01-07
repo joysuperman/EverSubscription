@@ -177,20 +177,26 @@ class Eversubscription {
 		$this->loader->add_action( 'admin_enqueue_scripts', $plugin_admin, 'enqueue_styles' );
 		$this->loader->add_action( 'admin_enqueue_scripts', $plugin_admin, 'enqueue_scripts' );
 		$this->loader->add_action( 'admin_menu', $plugin_admin, 'add_plugin_admin_menu' );
-		$this->loader->add_filter( 'product_type_selector', $plugin_admin, 'add_woo_product_type' );
-		// Register product class mapping on the admin instance (method lives in admin class)
-		$this->loader->add_filter('woocommerce_product_class', $plugin_admin, 'register_product_class', 10, 4);
-		// Correct hooks for admin tab
-		$this->loader->add_filter('woocommerce_product_data_tabs', $plugin_admin, 'ever_subscription_product_tab');
-		// Register the filter to enable the tab
-		$this->loader->add_filter( 'woocommerce_product_data_tabs', $plugin_admin, 'add_variation_support_to_tabs' );
-		$this->loader->add_action('woocommerce_product_data_panels', $plugin_admin, 'ever_subscription_product_tab_content');
+    
+		// CRITICAL: Register Data Stores
+		$this->loader->add_filter( 'woocommerce_data_stores', $plugin_admin, 'register_data_stores' );
 
-		// Save the fields
-		$this->loader->add_action('woocommerce_admin_process_product_object',$plugin_admin,'ever_subscription_save_product_data');
+		$this->loader->add_action( 'plugins_loaded', $plugin_admin , 'include_product_class' );
+		$this->loader->add_filter( 'product_type_selector', $plugin_admin, 'add_woo_product_type' );
+		$this->loader->add_filter( 'woocommerce_product_class', $plugin_admin, 'register_product_class', 10, 4 );
+		
+		// Tabs & UI
+		$this->loader->add_filter( 'woocommerce_product_data_tabs', $plugin_admin, 'ever_subscription_product_tab' );
+		$this->loader->add_filter( 'woocommerce_product_data_tabs', $plugin_admin, 'add_variation_support_to_tabs' );
+		$this->loader->add_action( 'woocommerce_product_data_panels', $plugin_admin, 'ever_subscription_product_tab_content' );
+
+		// Saving
+		$this->loader->add_action( 'woocommerce_admin_process_product_object', $plugin_admin, 'ever_subscription_save_product_data' );
+		$this->loader->add_action( 'woocommerce_variation_options_pricing', $plugin_admin, 'ever_subscription_variation_options', 10, 3 );
+		$this->loader->add_action( 'woocommerce_save_product_variation', $plugin_admin, 'ever_subscription_save_variation', 10, 2 );
 		// Variation UI and save handlers
 		$this->loader->add_action('woocommerce_variation_options_pricing', $plugin_admin, 'ever_subscription_variation_options', 10, 3);
-		$this->loader->add_action('woocommerce_save_product_variation', $plugin_admin, 'ever_subscription_save_variation', 10, 2);
+
 		$this->loader->add_filter('woocommerce_bulk_edit_variations_allowed_product_types', $plugin_admin, 'ever_subscription_variations_allowed_product_types', 10, 3);
 		$this->loader->add_action( 'woocommerce_checkout_order_processed', $plugin_admin, 'eversubscription_create_subscription_from_order' );
 		// Handle subscription creation on order completion
@@ -212,11 +218,11 @@ class Eversubscription {
 	private function define_public_hooks() {
 
 		// Include our custom product class only after WooCommerce core classes are available.
-		if ( class_exists( 'WC_Product_Simple' ) ) {
-			require_once plugin_dir_path( __FILE__ ) . '/class-wc-product-ever-subscription.php';
-		} else {
-			add_action( 'woocommerce_loaded', array( $this, 'include_product_class' ), 10 );
-		}
+		// if ( class_exists( 'WC_Product_Simple' ) ) {
+		// 	require_once plugin_dir_path( __FILE__ ) . '/class-wc-product-ever-subscription.php';
+		// } else {
+		// 	add_action( 'woocommerce_loaded', array( $this, 'include_product_class' ), 10 );
+		// }
 
 		$plugin_public = new Eversubscription_Public( $this->get_plugin_name(), $this->get_version() );
 
@@ -226,7 +232,9 @@ class Eversubscription {
 		// Keep internal product prices numeric; modify displayed price HTML instead
 		$this->loader->add_filter( 'woocommerce_get_price_html', $plugin_public, 'eversubscription_subscription_price_html', 10, 2 );
 		$this->loader->add_action( 'woocommerce_cart_calculate_fees', $plugin_public, 'eversubscription_apply_trial_discount_fee' );
-
+		// Variation prices
+		$this->loader->add_filter( 'woocommerce_variation_sale_price_html', $plugin_public, 'eversubscription_variation_price_html', 10, 3 );
+		$this->loader->add_filter( 'woocommerce_variation_price_html', $plugin_public, 'eversubscription_variation_price_html', 10, 3 );
 		// Display subscription info on product page
 		$this->loader->add_action( 'woocommerce_single_product_summary', $plugin_public, 'eversubscription_display_subscription_info', 25 );
 		// Show billing period on cart, checkout and order price display and item meta
@@ -294,20 +302,6 @@ class Eversubscription {
 	 */
 	public function get_version() {
 		return $this->version;
-	}
-
-
-	/**
-	 * Include the custom product class after WooCommerce is loaded.
-	 */
-	public function include_product_class() {
-		if ( ! class_exists( 'WC_Product_Ever_Subscription' ) ) {
-			require_once plugin_dir_path( __FILE__ ) . '/class-wc-product-ever-subscription.php';
-		}
-		// Also include variable/variation classes so WooCommerce can map them when needed
-		if ( ! class_exists( 'WC_Product_Ever_Subscription_Variable' ) ) {
-			require_once plugin_dir_path( __FILE__ ) . '/class-wc-product-ever-subscription-variable.php';
-		}
 	}
 
 }

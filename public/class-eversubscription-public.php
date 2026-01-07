@@ -173,54 +173,53 @@ class Eversubscription_Public {
 		* VARIABLE SUBSCRIPTION PRODUCT
 		* ================================ */
 		if ( $product->is_type( 'ever_subscription_variable' ) ) {
+            $variations = $product->get_available_variations();
+            $attributes = $product->get_variation_attributes();
 
-			$variations  = $product->get_available_variations() ?: [];
-			$attributes  = $product->get_variation_attributes() ?: [];
+            ?>
+            <div class="ever-subscription-info variable-subscription-selection">
+                <h4><?php esc_html_e( 'Choose Your Subscription Plan', $this->plugin_name ); ?></h4>
 
-			?>
-			<div class="ever-subscription-info">
-				<h4><?php esc_html_e( 'Choose Your Subscription Plan', $this->plugin_name ); ?></h4>
+                <form class="variations_form cart"
+                    method="post"
+                    data-product_id="<?php echo esc_attr( $product->get_id() ); ?>"
+                    data-product_variations="<?php echo esc_attr( wp_json_encode( $variations ) ); ?>">
 
-				<form class="variations_form cart"
-					method="post"
-					data-product_id="<?php echo esc_attr( $product->get_id() ); ?>"
-					data-product_variations="<?php echo esc_attr( wp_json_encode( $variations ) ); ?>">
+                    <div class="variations">
+                        <?php foreach ( $attributes as $attribute_name => $options ) : ?>
+                            <div class="attribute-selection-row">
+                                <label><?php echo wc_attribute_label( $attribute_name ); ?></label>
+                                <?php 
+                                    wc_dropdown_variation_attribute_options( array(
+                                        'options'   => $options,
+                                        'attribute' => $attribute_name,
+                                        'product'   => $product,
+                                    ) );
+                                ?>
+                            </div>
+                        <?php endforeach; ?>
+                    </div>
 
-					<?php if ( ! empty( $attributes ) ) : ?>
-						<?php foreach ( $attributes as $attribute_name => $options ) : ?>
-							<p class="form-row form-row-wide">
-								<label><?php echo wc_attribute_label( $attribute_name ); ?></label>
-								<?php 
-									// Safely render dropdown
-									wc_dropdown_variation_attribute_options( array(
-										'options' => $options,
-										'attribute' => $attribute_name,
-										'product' => $product,
-									) );
-								?>
-							</p>
-						<?php endforeach; ?>
-					<?php else : ?>
-						<p><?php esc_html_e( 'No variations available for this subscription.', $this->plugin_name ); ?></p>
-					<?php endif; ?>
+                    <div class="ever-variation-realtime-details">
+                        <div class="subscription-details-container"></div>
+                    </div>
 
-					<div class="single_variation">
-						<div class="subscription-details"></div>
-					</div>
-
-					<input type="hidden" name="add-to-cart" value="<?php echo esc_attr( $product->get_id() ); ?>">
-					<input type="hidden" name="product_id" value="<?php echo esc_attr( $product->get_id() ); ?>">
-					<input type="hidden" name="variation_id" class="variation_id" value="0">
-
-					<button type="submit" class="single_add_to_cart_button button alt">
-						<?php echo esc_html( get_option( 'eversubscription_add_to_cart_button_text', __( 'Subscribe', $this->plugin_name ) ) ); ?>
-					</button>
-
-				</form>
-			</div>
-			<?php
-			return;
-		}
+                    <div class="single_variation_wrap">
+                        <div class="woocommerce-variation single_variation"></div>
+                        <div class="woocommerce-variation-add-to-cart variations_button">
+                            <button type="submit" class="single_add_to_cart_button button alt">
+                                <?php echo esc_html( get_option( 'eversubscription_add_to_cart_button_text', __( 'Subscribe', $this->plugin_name ) ) ); ?>
+                            </button>
+                            <input type="hidden" name="add-to-cart" value="<?php echo absint( $product->get_id() ); ?>" />
+                            <input type="hidden" name="product_id" value="<?php echo absint( $product->get_id() ); ?>" />
+                            <input type="hidden" name="variation_id" class="variation_id" value="0" />
+                        </div>
+                    </div>
+                </form>
+            </div>
+            <?php
+            return;
+        }
 
 		/* ================================
 		* SIMPLE SUBSCRIPTION PRODUCT
@@ -274,23 +273,49 @@ class Eversubscription_Public {
 	 * Add subscription meta to variation JSON
 	 */
 	public function eversubscription_add_variation_subscription_data( $data, $product, $variation ) {
+        if ( ! $product->is_type( 'ever_subscription_variable' ) ) {
+            return $data;
+        }
 
-		if ( ! $product || ! $product->is_type( 'ever_subscription_variable' ) ) {
-			return $data;
-		}
+        // Get metadata
+        $price      = floatval($variation->get_meta('_ever_subscription_price'));
+        $sale_price = floatval($variation->get_meta('_ever_sale_price'));
+        $interval   = $variation->get_meta('_ever_billing_interval') ?: 1;
+        $period     = $variation->get_meta('_ever_billing_period') ?: 'month';
+        
+        // Format the display string (Real-time logic)
+        $billing_text = ($interval > 1) ? $interval . ' ' . $period . 's' : $period;
 
-		$data['ever_subscription'] = [
-			'price'      => $variation->get_meta('_ever_subscription_price'),
-			'interval'   => $variation->get_meta('_ever_billing_interval') ?: 1,
-			'period'     => $variation->get_meta('_ever_billing_period') ?: 'month',
-			'trial_l'    => (int) $variation->get_meta('_ever_subscription_trial_length'),
-			'trial_p'    => $variation->get_meta('_ever_subscription_trial_period') ?: 'day',
-			'signup_fee' => (float) $variation->get_meta('_ever_subscription_sign_up_fee'),
-			'note'       => $variation->get_meta('_ever_aditional_note'),
-		];
+        $data['ever_sub_html'] = '
+            <table class="ever-sub-details-table">
+                <tr>
+                    <td><strong>' . __( 'Subscription:', 'eversubscription' ) . '</strong></td>
+                    <td>' . wc_price($price) . ' / ' . $billing_text . '</td>
+                </tr>';
 
-		return $data;
-	}
+        if ($sale_price > 0) {
+            $data['ever_sub_html'] .= '
+                <tr>
+                    <td><strong>' . __( 'Sale Price:', 'eversubscription' ) . '</strong></td>
+                    <td>' . wc_price($sale_price) . '</td>
+                </tr>';
+        }
+
+        $signup_fee = floatval($variation->get_meta('_ever_subscription_sign_up_fee'));
+        if ($signup_fee > 0) {
+            $data['ever_sub_html'] .= '<tr><td><strong>' . __( 'Sign-up Fee:', 'eversubscription' ) . '</strong></td><td>' . wc_price($signup_fee) . '</td></tr>';
+        }
+
+        $trial = intval($variation->get_meta('_ever_subscription_trial_length'));
+        if ($trial > 0) {
+            $trial_p = $variation->get_meta('_ever_subscription_trial_period') ?: 'day';
+            $data['ever_sub_html'] .= '<tr><td><strong>' . __( 'Free Trial:', 'eversubscription' ) . '</strong></td><td>' . $trial . ' ' . $trial_p . ($trial > 1 ? 's' : '') . '</td></tr>';
+        }
+
+        $data['ever_sub_html'] .= '</table>';
+
+        return $data;
+    }
 
 
 	/**
@@ -354,33 +379,87 @@ class Eversubscription_Public {
 
         // Variable subscription (SAFE)
         if ( $product->is_type( 'ever_subscription_variable' ) ) {
+			$variation_ids = $product->get_children();
+			
+			if ( empty( $variation_ids ) ) {
+				return $price_html;
+			}
 
-            $prices = $product->get_variation_prices( true );
+			$prices = array();
+			$display_prices = array();
 
-            // HARD GUARD — prevents fatal error
-            if ( empty( $prices ) || empty( $prices['price'] ) || ! is_array( $prices['price'] ) ) {
-                return $price_html;
-            }
+			foreach ( $variation_ids as $variation_id ) {
+				$variation = wc_get_product( $variation_id );
+				if ( ! $variation || ! $variation->is_visible() ) continue;
 
-            $min_price = min( $prices['price'] );
-            $max_price = max( $prices['price'] );
+				// Get our custom meta values
+				$reg_price  = floatval( $variation->get_meta( '_ever_subscription_price' ) );
+				$sale_price = $variation->get_meta( '_ever_sale_price' ); // String/Float
+				$period     = $variation->get_meta( '_ever_billing_period' ) ?: 'month';
 
-            if ( $min_price === $max_price ) {
-                $range_html = wc_price( $min_price );
-            } else {
-                $range_html = sprintf(
-                    __( 'From: %s', 'woocommerce' ),
-                    wc_price( $min_price )
-                );
-            }
+				// Check if Variation is on sale
+				$active_price = $reg_price;
+				if ( $sale_price !== '' && floatval( $sale_price ) > 0 ) {
+					// Optional: You could check date limits here too
+					$active_price = floatval( $sale_price );
+				}
 
-            $billing_period = $product->get_meta( '_ever_billing_period' ) ?: 'month';
+				if ( $active_price > 0 ) {
+					$prices[] = $active_price;
+					// Store formatted string: "$10.00 / Day"
+					$display_prices[$active_price] = wc_price( $active_price ) . ' / ' . esc_html( ucfirst($period) );
+				}
+			}
 
-            return $range_html . ' /' . esc_html( $billing_period );
-        }
+			if ( empty( $prices ) ) {
+				return $price_html;
+			}
+
+			sort( $prices );
+			$min_price = current( $prices );
+			$max_price = end( $prices );
+
+			if ( $min_price !== $max_price ) {
+				// Range format: "$10.00 / Day – $20.00 / Month"
+				$range_html = $display_prices[$min_price] . ' &ndash; ' . $display_prices[$max_price];
+			} else {
+				// Single variation or all same: "$10.00 / Month"
+				$range_html = $display_prices[$min_price];
+			}
+
+			return $range_html;
+		}
 
         return $price_html;
     }
+
+
+	/**
+	 * Fix the price HTML for individual variations when selected.
+	 * This ensures the sale price actually shows as a discount and includes the period.
+	 */
+	public function eversubscription_variation_price_html( $price_html, $variation, $product ) {
+		// Only target our custom variable product type
+		if ( ! $product->is_type( 'ever_subscription_variable' ) ) {
+			return $price_html;
+		}
+
+		$reg_price  = floatval( $variation->get_meta( '_ever_subscription_price' ) );
+		$sale_price = $variation->get_meta( '_ever_sale_price' );
+		$period     = $variation->get_meta( '_ever_billing_period' ) ?: 'month';
+		$interval   = $variation->get_meta( '_ever_billing_interval' ) ?: 1;
+
+		$billing_text = ( $interval > 1 ) ? $interval . ' ' . $period . 's' : $period;
+
+		// Check if there is a valid sale price
+		if ( $sale_price !== '' && floatval( $sale_price ) > 0 && floatval( $sale_price ) < $reg_price ) {
+			$price_html = '<del aria-hidden="true">' . wc_price( $reg_price ) . '</del> <ins aria-hidden="true">' . wc_price( $sale_price ) . '</ins>';
+		} else {
+			$price_html = wc_price( $reg_price );
+		}
+
+		return $price_html . ' / ' . esc_html( ucfirst( $billing_text ) );
+	}
 
 	/**
 	 * Add subscription details to cart/checkout item meta display.

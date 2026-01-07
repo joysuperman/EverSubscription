@@ -4,3 +4,29 @@
  */
 
 /* Subscription Tab Visibility */
+
+/* .ever_subscription_hidden {
+    display: none !important;
+} */
+
+/* Core Hiding Class */
+.ever_subscription_hidden {
+    display: none !important;
+}
+
+/* Style our custom links inside the labels */
+.ever_subscription_variation_settings label a.ever_sale_schedule, 
+.ever_subscription_variation_settings label a.ever_cancel_sale_schedule {
+    margin-left: 10px;
+    font-weight: 400;
+    text-decoration: underline;
+    cursor: pointer;
+    font-size: 11px;
+}
+
+
+/* Hide standard WC pricing fields for our product type */
+.product-type-ever_subscription_variable .variable_pricing > p:not([class*="_ever_"]),
+.product-type-ever_subscription_variable .variable_pricing > .sale_price_dates_fields:not(.ever_subscription_variation_settings *) {
+    display: none !important;
+}

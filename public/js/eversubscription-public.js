@@ -29,26 +29,29 @@
 	 * practising this, we should strive to set a better example in our own work.
 	 */
 
-	 / Update subscription details when a variation is found
-    $('.variations_form').on('found_variation', function(event, variation) {
+	// Update subscription details when a variation is found
+    $(function() {
+        /**
+         * Real-time Variation Update
+         */
+        $(document).on('found_variation', 'form.variations_form', function(event, variation) {
+            const $detailsContainer = $('.ever-variation-realtime-details');
+            const $contentArea = $detailsContainer.find('.subscription-details-container');
 
-        if (!variation.ever_subscription) return;
+            if (variation.ever_sub_html) {
+                // Inject the HTML we prepared in PHP
+                $contentArea.html(variation.ever_sub_html);
+                $detailsContainer.slideDown(200);
+            } else {
+                $detailsContainer.hide();
+            }
+        });
 
-        var s = variation.ever_subscription;
-
-        // Format price using WooCommerce formatted price (requires WooCommerce JS settings)
-        var formattedPrice = typeof wc_price === 'function' ? wc_price(s.price) : s.price;
-        var formattedFee = typeof wc_price === 'function' ? wc_price(s.signup_fee) : s.signup_fee;
-
-        var html = `
-            <p><strong>Price:</strong> ${formattedPrice}</p>
-            <p><strong>Billing:</strong> Every ${s.interval} ${s.period}${s.interval > 1 ? 's' : ''}</p>
-            ${s.trial_l > 0 ? `<p><strong>Trial:</strong> ${s.trial_l} ${s.trial_p}${s.trial_l > 1 ? 's' : ''}</p>` : ''}
-            ${s.signup_fee > 0 ? `<p><strong>Sign-up Fee:</strong> ${formattedFee}</p>` : ''}
-            ${s.note ? `<p>${s.note}</p>` : ''}
-        `;
-
-        // Inject HTML into subscription-details container
-        $(this).find('.subscription-details').html(html);
+        /**
+         * Clear details if selection is reset
+         */
+        $(document).on('reset_data', 'form.variations_form', function() {
+            $('.ever-variation-realtime-details').hide();
+        });
     });
 })( jQuery );
