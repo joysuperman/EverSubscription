@@ -32,26 +32,38 @@
 	// Update subscription details when a variation is found
     $(function() {
         /**
-         * Real-time Variation Update
+         * 1. Force WooCommerce to check variations when our custom selects change
+         */
+        $(document).on('change', '.attribute-selection-row select', function() {
+            $(this).closest('form.variations_form').trigger('check_variations');
+        });
+
+        /**
+         * 2. Real-time Variation Update
          */
         $(document).on('found_variation', 'form.variations_form', function(event, variation) {
+            const $form = $(this);
             const $detailsContainer = $('.ever-variation-realtime-details');
             const $contentArea = $detailsContainer.find('.subscription-details-container');
 
             if (variation.ever_sub_html) {
-                // Inject the HTML we prepared in PHP
                 $contentArea.html(variation.ever_sub_html);
                 $detailsContainer.slideDown(200);
             } else {
                 $detailsContainer.hide();
             }
+
+            // Sync ID and enable button
+            $form.find('input.variation_id').val(variation.variation_id).trigger('change');
+            $form.find('.single_add_to_cart_button').removeClass('disabled').prop('disabled', false);
         });
 
         /**
-         * Clear details if selection is reset
+         * 3. Clear details on reset
          */
         $(document).on('reset_data', 'form.variations_form', function() {
-            $('.ever-variation-realtime-details').hide();
+            $('.ever-variation-realtime-details').slideUp(200);
+            $(this).find('.single_add_to_cart_button').addClass('disabled').prop('disabled', true);
         });
     });
 })( jQuery );

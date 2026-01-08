@@ -191,7 +191,6 @@ class Eversubscription_Admin {
 				'value'         => get_post_meta( $variation_id, '_ever_subscription_price', true ),
 				'data_type'     => 'price',
 				'wrapper_class' => 'form-row form-row-first',
-				'placeholder'   => __( 'Price for each billing cycle', $this->plugin_name )
 			) );
 
 		echo '</div>';
@@ -203,20 +202,19 @@ class Eversubscription_Admin {
 		echo '<div class="options_group form-row-group">';
 			woocommerce_wp_text_input( array(
 				'id'            => "_ever_sale_price[{$loop}]",
-				// We use specific classes 'ever_sale_schedule' and 'ever_cancel_sale_schedule'
 				'label'         => sprintf( 
-					__( 'Subscription Sale Price (%1$s) %2$s', $this->plugin_name ), 
+					__( 'Sale Price (%1$s) %2$s', $this->plugin_name ), 
 					$currency_symbol,
 					'<a href="#" class="ever_sale_schedule ' . ( $has_dates ? 'ever_subscription_hidden' : '' ) . '">' . __( 'Schedule', 'woocommerce' ) . '</a>' .
 					'<a href="#" class="ever_cancel_sale_schedule ' . ( $has_dates ? '' : 'ever_subscription_hidden' ) . '">' . __( 'Cancel schedule', 'woocommerce' ) . '</a>'
 				),
 				'value'         => get_post_meta( $variation_id, '_ever_sale_price', true ),
-				'data_type'     => 'price',
+				'data_type'     => 'sale',
 				'wrapper_class' => 'form-row form-row-last',
 			) );
 		echo '</div>';
 
-		// 3. Ever Sale Dates Container
+		// 2. Ever Sale Dates Container
 		echo '<div class="ever_sale_price_dates_fields ' . ( $has_dates ? '' : 'ever_subscription_hidden' ) . '">';
 			echo '<div class="options_group form-row-group">';
 				echo '<p class="form-row form-row-first">';
@@ -230,7 +228,7 @@ class Eversubscription_Admin {
 			echo '</div>';
 		echo '</div>';
 
-        // 2. Billing Period & Subscription Length (Row 2)
+        // 3. Billing Period & Subscription Length (Row 2)
         echo '<div class="options_group form-row-group">';
             woocommerce_wp_select( array(
                 'id'            => "_ever_billing_period[{$loop}]",
@@ -251,7 +249,7 @@ class Eversubscription_Admin {
             ) );
         echo '</div>';
 
-        // 3. Sign-up Fee & Trial Length (Row 3)
+        // 4. Sign-up Fee & Trial Length (Row 3)
         echo '<div class="options_group form-row-group">';
             woocommerce_wp_text_input( array(
                 'id'            => "_ever_subscription_sign_up_fee[{$loop}]",
@@ -260,14 +258,25 @@ class Eversubscription_Admin {
                 'wrapper_class' => 'form-row form-row-first',
                 'data_type'     => 'price',
             ) );
-
-            woocommerce_wp_text_input( array(
-                'id'            => "_ever_subscription_trial_length[{$loop}]",
-                'label'         => __( 'Trial Length', $this->plugin_name ),
-                'value'         => get_post_meta( $variation_id, '_ever_subscription_trial_length', true ) ?: 0,
-                'type'          => 'number',
-                'wrapper_class' => 'form-row form-row-last',
-            ) );
+			
+			echo '<div class="form-row form-row-last">';
+				echo '<div class="options_group form-row-group">';
+					woocommerce_wp_text_input( array(
+						'id'            => "_ever_subscription_trial_length[{$loop}]",
+						'label'         => __( 'Trial Length', $this->plugin_name ),
+						'value'         => get_post_meta( $variation_id, '_ever_subscription_trial_length', true ) ?: 0,
+						'type'          => 'number',
+						'wrapper_class' => 'form-row form-row-first',
+					) );
+					woocommerce_wp_select([
+						'id'      => "_ever_subscription_trial_period[{$loop}]",
+						'label'   => __('Trial Period', $this->plugin_name),
+						'options' => ['day'=>'Days','week'=>'Weeks','month'=>'Months','year'=>'Years'],
+						'value'   => get_post_meta( $variation_id, '_ever_subscription_trial_period', true ) ?: 'day',
+						'wrapper_class' => 'form-row form-row-last',
+					]);
+				echo '</div>';
+			echo '</div>';
         echo '</div>';
 
         // 5. Additional Notes
@@ -289,16 +298,62 @@ class Eversubscription_Admin {
 	 * @param int $i Loop index
 	 */
 	public function ever_subscription_save_variation( $variation_id, $i ) {
-        if ( ! isset( $_POST['_ever_subscription_price'][ $i ] ) ) return;
+		// 1. Subscription Price & Sync to Core Regular Price
+		if ( isset( $_POST['_ever_subscription_price'][ $i ] ) ) {
+			$price = wc_format_decimal( $_POST['_ever_subscription_price'][ $i ] );
+			update_post_meta( $variation_id, '_ever_subscription_price', $price );
+			update_post_meta( $variation_id, '_regular_price', $price );
+		}
 
-        $price = wc_format_decimal( $_POST['_ever_subscription_price'][ $i ] );
-        update_post_meta( $variation_id, '_ever_subscription_price', $price );
-        update_post_meta( $variation_id, '_ever_billing_period', sanitize_text_field( $_POST['_ever_billing_period'][ $i ] ) );
-        
-        // Sync with core prices so the product is "Purchasable"
-        update_post_meta( $variation_id, '_regular_price', $price );
-        update_post_meta( $variation_id, '_price', $price );
-    }
+		// 2. Sale Price & Core Sale Price Sync
+		if ( isset( $_POST['_ever_sale_price'][ $i ] ) ) {
+			$sale_price = wc_format_decimal( $_POST['_ever_sale_price'][ $i ] );
+			update_post_meta( $variation_id, '_ever_sale_price', $sale_price );
+			update_post_meta( $variation_id, '_sale_price', $sale_price );
+			
+			// Final active price logic for WooCommerce
+			$active_price = ( $sale_price !== '' ) ? $sale_price : $price;
+			update_post_meta( $variation_id, '_price', $active_price );
+		}
+
+		// 3. Sale Dates
+		if ( isset( $_POST['_ever_sale_price_dates_from'][ $i ] ) ) {
+			$date_from = sanitize_text_field( $_POST['_ever_sale_price_dates_from'][ $i ] );
+			update_post_meta( $variation_id, '_ever_sale_price_dates_from', $date_from );
+			update_post_meta( $variation_id, '_sale_price_dates_from', ! empty( $date_from ) ? strtotime( $date_from ) : '' );
+		}
+		if ( isset( $_POST['_ever_sale_price_dates_to'][ $i ] ) ) {
+			$date_to = sanitize_text_field( $_POST['_ever_sale_price_dates_to'][ $i ] );
+			update_post_meta( $variation_id, '_ever_sale_price_dates_to', $date_to );
+			update_post_meta( $variation_id, '_sale_price_dates_to', ! empty( $date_to ) ? strtotime( $date_to . ' 23:59:59' ) : '' );
+		}
+
+		// 4. Billing Details
+		if ( isset( $_POST['_ever_billing_period'][ $i ] ) ) {
+			update_post_meta( $variation_id, '_ever_billing_period', sanitize_text_field( $_POST['_ever_billing_period'][ $i ] ) );
+		}
+		if ( isset( $_POST['_ever_subscription_length'][ $i ] ) ) {
+			update_post_meta( $variation_id, '_ever_subscription_length', sanitize_text_field( $_POST['_ever_subscription_length'][ $i ] ) );
+		}
+
+		// 5. Sign-up Fee
+		if ( isset( $_POST['_ever_subscription_sign_up_fee'][ $i ] ) ) {
+			update_post_meta( $variation_id, '_ever_subscription_sign_up_fee', wc_format_decimal( $_POST['_ever_subscription_sign_up_fee'][ $i ] ) );
+		}
+
+		// 6. Trial Settings
+		if ( isset( $_POST['_ever_subscription_trial_length'][ $i ] ) ) {
+			update_post_meta( $variation_id, '_ever_subscription_trial_length', absint( $_POST['_ever_subscription_trial_length'][ $i ] ) );
+		}
+		if ( isset( $_POST['_ever_subscription_trial_period'][ $i ] ) ) {
+			update_post_meta( $variation_id, '_ever_subscription_trial_period', sanitize_text_field( $_POST['_ever_subscription_trial_period'][ $i ] ) );
+		}
+
+		// 7. Additional Notes
+		if ( isset( $_POST['_ever_aditional_note'][ $i ] ) ) {
+			update_post_meta( $variation_id, '_ever_aditional_note', sanitize_textarea_field( $_POST['_ever_aditional_note'][ $i ] ) );
+		}
+	}
 
 	/**
 	 * Add menu admin page

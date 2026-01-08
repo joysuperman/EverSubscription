@@ -216,14 +216,6 @@ class Eversubscription {
 	 * @access   private
 	 */
 	private function define_public_hooks() {
-
-		// Include our custom product class only after WooCommerce core classes are available.
-		// if ( class_exists( 'WC_Product_Simple' ) ) {
-		// 	require_once plugin_dir_path( __FILE__ ) . '/class-wc-product-ever-subscription.php';
-		// } else {
-		// 	add_action( 'woocommerce_loaded', array( $this, 'include_product_class' ), 10 );
-		// }
-
 		$plugin_public = new Eversubscription_Public( $this->get_plugin_name(), $this->get_version() );
 
 		$this->loader->add_action( 'wp_enqueue_scripts', $plugin_public, 'enqueue_styles' );
@@ -232,9 +224,6 @@ class Eversubscription {
 		// Keep internal product prices numeric; modify displayed price HTML instead
 		$this->loader->add_filter( 'woocommerce_get_price_html', $plugin_public, 'eversubscription_subscription_price_html', 10, 2 );
 		$this->loader->add_action( 'woocommerce_cart_calculate_fees', $plugin_public, 'eversubscription_apply_trial_discount_fee' );
-		// Variation prices
-		$this->loader->add_filter( 'woocommerce_variation_sale_price_html', $plugin_public, 'eversubscription_variation_price_html', 10, 3 );
-		$this->loader->add_filter( 'woocommerce_variation_price_html', $plugin_public, 'eversubscription_variation_price_html', 10, 3 );
 		// Display subscription info on product page
 		$this->loader->add_action( 'woocommerce_single_product_summary', $plugin_public, 'eversubscription_display_subscription_info', 25 );
 		// Show billing period on cart, checkout and order price display and item meta

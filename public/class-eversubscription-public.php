@@ -115,7 +115,6 @@ class Eversubscription_Public {
 
 		// 2. Determine if the user is a returning customer
 		$billing_email = WC()->checkout ? WC()->checkout->get_value('billing_email') : '';
-		$user_exists   = is_user_logged_in() || ( ! empty( $billing_email ) && email_exists( $billing_email ) );
 
 		foreach ( $cart->get_cart() as $cart_item ) {
 			$product = $cart_item['data'];
@@ -179,42 +178,51 @@ class Eversubscription_Public {
             ?>
             <div class="ever-subscription-info variable-subscription-selection">
                 <h4><?php esc_html_e( 'Choose Your Subscription Plan', $this->plugin_name ); ?></h4>
-
-                <form class="variations_form cart"
-                    method="post"
-                    data-product_id="<?php echo esc_attr( $product->get_id() ); ?>"
-                    data-product_variations="<?php echo esc_attr( wp_json_encode( $variations ) ); ?>">
-
-                    <div class="variations">
-                        <?php foreach ( $attributes as $attribute_name => $options ) : ?>
-                            <div class="attribute-selection-row">
-                                <label><?php echo wc_attribute_label( $attribute_name ); ?></label>
-                                <?php 
-                                    wc_dropdown_variation_attribute_options( array(
-                                        'options'   => $options,
-                                        'attribute' => $attribute_name,
-                                        'product'   => $product,
-                                    ) );
-                                ?>
-                            </div>
-                        <?php endforeach; ?>
-                    </div>
-
+				<?php do_action( 'woocommerce_before_variations_form' ); ?>
+                <form class="variations_form cart" enctype="multipart/form-data" action="<?php echo esc_url( wc_get_cart_url() ); ?>" method="post" data-product_id="<?php echo esc_attr( $product->get_id() ); ?>" data-product_variations="<?php echo esc_attr( wp_json_encode( $variations ) ); ?>">
+				<?php if ( empty( $product->get_available_variations() ) && false !== $product->get_available_variations() ) : ?>
+					<p class="stock out-of-stock"><?php _e( 'This product is currently out of stock and unavailable.', 'woocommerce' ); ?></p>
+				<?php else : ?>
+					<div class="variations">
+						<?php foreach ( $attributes as $attribute_name => $options ) : ?>
+							<div class="attribute-selection-row">
+								<label for="<?php echo wc_attribute_label( $attribute_name ); ?>"><?php echo wc_attribute_label( $attribute_name ); ?></label>
+								<?php 
+									wc_dropdown_variation_attribute_options( array(
+										'options'   => $options,
+										'attribute' => $attribute_name,
+										'product'   => $product,
+									) );
+								?>
+							</div>
+						<?php endforeach; ?>
+					</div>
+                    
                     <div class="ever-variation-realtime-details">
                         <div class="subscription-details-container"></div>
                     </div>
 
+					<?php do_action( 'woocommerce_before_add_to_cart_button' ); ?>
+
                     <div class="single_variation_wrap">
-                        <div class="woocommerce-variation single_variation"></div>
-                        <div class="woocommerce-variation-add-to-cart variations_button">
-                            <button type="submit" class="single_add_to_cart_button button alt">
-                                <?php echo esc_html( get_option( 'eversubscription_add_to_cart_button_text', __( 'Subscribe', $this->plugin_name ) ) ); ?>
-                            </button>
-                            <input type="hidden" name="add-to-cart" value="<?php echo absint( $product->get_id() ); ?>" />
-                            <input type="hidden" name="product_id" value="<?php echo absint( $product->get_id() ); ?>" />
-                            <input type="hidden" name="variation_id" class="variation_id" value="0" />
-                        </div>
+						<?php
+						/**
+						 * woocommerce_before_single_variation Hook.
+						 */
+						do_action( 'woocommerce_before_single_variation' );
+						
+							do_action( 'woocommerce_single_variation' );
+
+						/**
+						 * woocommerce_after_single_variation Hook.
+						 */
+						do_action( 'woocommerce_after_single_variation' ); 
+						?>
                     </div>
+
+					<?php do_action( 'woocommerce_after_add_to_cart_button' ); ?>
+					
+					<?php endif; ?>
                 </form>
             </div>
             <?php
@@ -406,7 +414,6 @@ class Eversubscription_Public {
 
 				if ( $active_price > 0 ) {
 					$prices[] = $active_price;
-					// Store formatted string: "$10.00 / Day"
 					$display_prices[$active_price] = wc_price( $active_price ) . ' / ' . esc_html( ucfirst($period) );
 				}
 			}
@@ -420,10 +427,8 @@ class Eversubscription_Public {
 			$max_price = end( $prices );
 
 			if ( $min_price !== $max_price ) {
-				// Range format: "$10.00 / Day – $20.00 / Month"
 				$range_html = $display_prices[$min_price] . ' &ndash; ' . $display_prices[$max_price];
 			} else {
-				// Single variation or all same: "$10.00 / Month"
 				$range_html = $display_prices[$min_price];
 			}
 
@@ -438,28 +443,28 @@ class Eversubscription_Public {
 	 * Fix the price HTML for individual variations when selected.
 	 * This ensures the sale price actually shows as a discount and includes the period.
 	 */
-	public function eversubscription_variation_price_html( $price_html, $variation, $product ) {
-		// Only target our custom variable product type
-		if ( ! $product->is_type( 'ever_subscription_variable' ) ) {
-			return $price_html;
-		}
+	// public function eversubscription_variation_price_html( $price_html, $variation, $product ) {
+	// 	// Only target our custom variable product type
+	// 	if ( ! $product->is_type( 'ever_subscription_variable' ) ) {
+	// 		return $price_html;
+	// 	}
 
-		$reg_price  = floatval( $variation->get_meta( '_ever_subscription_price' ) );
-		$sale_price = $variation->get_meta( '_ever_sale_price' );
-		$period     = $variation->get_meta( '_ever_billing_period' ) ?: 'month';
-		$interval   = $variation->get_meta( '_ever_billing_interval' ) ?: 1;
+	// 	$reg_price  = floatval( $variation->get_meta( '_ever_subscription_price' ) );
+	// 	$sale_price = floatval( $variation->get_meta( '_ever_sale_price' ) );
+	// 	$period     = $variation->get_meta( '_ever_billing_period' ) ?: 'month';
+	// 	$interval   = $variation->get_meta( '_ever_billing_interval' ) ?: 1;
 
-		$billing_text = ( $interval > 1 ) ? $interval . ' ' . $period . 's' : $period;
+	// 	$billing_text = ( $interval > 1 ) ? $interval . ' ' . $period . 's' : $period;
 
-		// Check if there is a valid sale price
-		if ( $sale_price !== '' && floatval( $sale_price ) > 0 && floatval( $sale_price ) < $reg_price ) {
-			$price_html = '<del aria-hidden="true">' . wc_price( $reg_price ) . '</del> <ins aria-hidden="true">' . wc_price( $sale_price ) . '</ins>';
-		} else {
-			$price_html = wc_price( $reg_price );
-		}
+	// 	// Check if there is a valid sale price
+	// 	if ( $sale_price !== '' && floatval( $sale_price ) > 0 && floatval( $sale_price ) < $reg_price ) {
+	// 		$price_html = '<del aria-hidden="true">' . wc_price( $reg_price ) . '</del> <ins aria-hidden="true">' . wc_price( $sale_price ) . '</ins>';
+	// 	} else {
+	// 		$price_html = wc_price( $reg_price );
+	// 	}
 
-		return $price_html . ' / ' . esc_html( ucfirst( $billing_text ) );
-	}
+	// 	return $price_html . ' / ' . esc_html( ucfirst( $billing_text ) );
+	// }
 
 	/**
 	 * Add subscription details to cart/checkout item meta display.
